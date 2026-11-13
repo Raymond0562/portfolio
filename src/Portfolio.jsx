@@ -189,14 +189,6 @@ export const PORTFOLIO_CONFIG = {
     linkedin: "https://www.linkedin.com/in/raymond-yang-tamu/",
   },
 
-  // Big numbers under the hero: about me, not the projects below.
-  stats: [
-    { v: "94", k: "credit hours", d: "earned toward a B.S. in Computer Engineering" },
-    { v: "2", k: "minors", d: "Mathematics and Cybersecurity" },
-    { v: "3", k: "languages", d: "English, Mandarin, and Spanish" },
-    { v: "2×", k: "state gold", d: "UIL 6A medalist, 2022 and 2023" },
-  ],
-
   location: {
     city: "College Station, TX",
     coords: "30.6280° N, 96.3344° W",
@@ -324,12 +316,12 @@ export const PORTFOLIO_CONFIG = {
       icon: "bjj",
       label: "Brazilian Jiu-Jitsu",
       text: "I've been training for 2 years now. I started in the second semester of my freshman year at the TAMU BJJ Club and have kept coming back to the mats ever since.",
-      meta: { k: "training since", v: "Spring 2025" },
+      meta: { k: "belt", v: "White belt" },
     },
     {
       icon: "lego",
       label: "Legos",
-      text: "I build sets when I want to work with my hands away from a screen. My favorite has a TV that scrolls a Super Mario Bros. level when you turn the crank.",
+      text: "I've loved Legos ever since I was a kid. Snapping bricks together was the first time I got to make something of my own, and that feeling is what started my love for building things.",
       meta: { k: "favorite set", v: "Nintendo Entertainment System" },
     },
     {
@@ -341,7 +333,7 @@ export const PORTFOLIO_CONFIG = {
     {
       icon: "hike",
       label: "Hiking",
-      text: "I backpacked the Eagle Rock Loop in Arkansas, and the best hike I've ever done is the climb up Emory Peak in Big Bend.",
+      text: "Getting away from the screen matters, and one of my favorite ways to do it is camping and hiking. One of my best memories is hiking up Emory Peak at 4 a.m. to reach the highest point in Big Bend by sunrise.",
       meta: { k: "favorite hike", v: "Emory Peak, Big Bend" },
     },
   ],
@@ -469,6 +461,17 @@ export const PROJECTS_DATA = [
     featured: true,
   },
   {
+    id: "armv8-cpu",
+    name: "64-bit ARMv8 Single-Cycle Processor",
+    category: "embedded",
+    visual: "datapath",
+    description:
+      "A 64-bit processor written in Verilog that runs a subset of the ARMv8 instruction set, one instruction per clock cycle. Fetch, decode, register read, ALU, data memory, and write-back all finish inside a single cycle across 11 instructions, verified in Icarus Verilog with self-checking testbenches.",
+    tags: ["Verilog", "ARMv8", "Computer Architecture", "Digital Design", "Icarus Verilog"],
+    repo: "",
+    featured: true,
+  },
+  {
     id: "gcri-attestation",
     name: "TPM Remote Attestation for Drones",
     org: "GCRI",
@@ -478,7 +481,7 @@ export const PROJECTS_DATA = [
       "TPM-based remote attestation pipeline on Raspberry Pi hardware. A nonce challenge/response with PCR-backed evidence proves a drone's software integrity to the ground station, and tampered or incomplete baseline claims are rejected before network trust is granted.",
     tags: ["TPM 2.0", "Remote Attestation", "Raspberry Pi", "Python", "MAVLink"],
     repo: "",
-    featured: true,
+    featured: false,
   },
   {
     id: "can-uart",
@@ -507,6 +510,7 @@ export const PROJECTS_DATA = [
     id: "crazy-8",
     name: "Crazy-8",
     category: "systems",
+    visual: "cards",
     description:
       "Card game engine in C++ (Game/Player/Card classes) with file-based deck loading, input validation, manual dynamic memory management, and separate AI and human player logic.",
     tags: ["C++", "OOP", "Memory Management"],
@@ -517,6 +521,7 @@ export const PROJECTS_DATA = [
     id: "file-organizer",
     name: "Automated File Organizer",
     category: "systems",
+    visual: "sort",
     description:
       "Python tool that watches Downloads with watchdog and sorts new files into 6 typed categories, skipping files still mid-download, handling duplicate names, and reverting with one command.",
     tags: ["Python", "watchdog", "Automation"],
@@ -978,20 +983,6 @@ function Hero({ onNav, onCopyEmail }) {
 
       <Reveal delay={200} className="min-w-0">
         <TerminalCard />
-      </Reveal>
-
-      <Reveal delay={320} className="lg:col-span-2">
-        <dl className="stat-strip">
-          {C.stats.map((stat) => (
-            <div key={stat.k} className="stat">
-              <dd className="font-serif text-5xl leading-none text-zinc-50 sm:text-6xl">{stat.v}</dd>
-              <dt className="mt-2 flex flex-col gap-0.5">
-                <span className="font-mono text-[11px] uppercase tracking-widest text-sky-400">{stat.k}</span>
-                <span className="text-[13px] text-zinc-500">{stat.d}</span>
-              </dt>
-            </div>
-          ))}
-        </dl>
       </Reveal>
     </section>
   );
@@ -1495,7 +1486,86 @@ function RingVisual() {
   );
 }
 
+function DatapathVisual() {
+  const stages = ["PC", "Instr Mem", "Reg File", "ALU", "Data Mem"];
+  const ops = ["ADD", "SUB", "AND", "ORR", "ADDI", "SUBI", "MOVZ", "LDUR", "STUR", "CBZ", "B"];
+  return (
+    <div className="flex w-full flex-col gap-3 font-mono text-[11px]">
+      <p className="flex flex-wrap items-center gap-2">
+        <span className="viz-chip viz-chip-ctl">Control Unit</span>
+        <span className="text-zinc-500">decodes instr[31:21], drives every mux below</span>
+      </p>
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
+        {stages.map((stage) => (
+          <React.Fragment key={stage}>
+            <span className="viz-chip text-zinc-200">{stage}</span>
+            <ArrowRight size={12} className="text-zinc-600" aria-hidden="true" />
+          </React.Fragment>
+        ))}
+        <span className="viz-chip viz-chip-ok">write back</span>
+      </div>
+      <ul className="flex flex-wrap gap-1">
+        {ops.map((op) => (
+          <li key={op} className="op">
+            {op}
+          </li>
+        ))}
+      </ul>
+      <VizCaption>11 instructions, 64-bit datapath, one clock cycle each</VizCaption>
+    </div>
+  );
+}
+
+function CardsVisual() {
+  const hand = [
+    { r: "3", s: "♥", red: true },
+    { r: "J", s: "♣" },
+    { r: "8", s: "♠", wild: true },
+    { r: "K", s: "♦", red: true },
+    { r: "5", s: "♠" },
+  ];
+  return (
+    <div className="flex w-full flex-col items-center gap-3">
+      <ul className="flex items-end justify-center gap-2 pt-3">
+        {hand.map((card) => (
+          <li key={card.r + card.s} className={cx("pcard", card.red && "is-red", card.wild && "is-wild")}>
+            <span>{card.r}</span>
+            <span aria-hidden="true">{card.s}</span>
+          </li>
+        ))}
+      </ul>
+      <VizCaption>an 8 is wild: play it and declare the next suit</VizCaption>
+    </div>
+  );
+}
+
+function SortVisual() {
+  const folders = ["images", "documents", "videos", "audio", "installers"];
+  return (
+    <div className="flex w-full flex-col gap-3 font-mono text-[11px]">
+      <p className="flex flex-wrap items-center gap-2">
+        <span className="viz-chip text-zinc-200">~/Downloads</span>
+        <span className="text-zinc-500">watched in real time</span>
+      </p>
+      <p className="flex items-center gap-2 text-zinc-500">
+        <ArrowRight size={12} className="rotate-90 text-zinc-600" aria-hidden="true" /> sorted by file extension
+      </p>
+      <ul className="flex flex-wrap gap-1.5">
+        {folders.map((folder) => (
+          <li key={folder} className="viz-chip text-sky-300">
+            {folder}/
+          </li>
+        ))}
+      </ul>
+      <VizCaption>files still downloading are skipped until their size stops changing</VizCaption>
+    </div>
+  );
+}
+
 const PROJECT_VISUALS = {
+  datapath: DatapathVisual,
+  cards: CardsVisual,
+  sort: SortVisual,
   odds: OddsVisual,
   throughput: ThroughputVisual,
   vlan: VlanVisual,
@@ -1508,17 +1578,17 @@ const PROJECT_VISUALS = {
  * Projects
  * -------------------------------------------------------------------------- */
 
-function ProjectCard({ project }) {
+function ProjectCard({ project, wide = false }) {
   const category = C.categories.find((c) => c.id === project.category);
   const Visual = PROJECT_VISUALS[project.visual];
   return (
-    <Card className="flex h-full flex-col overflow-hidden">
+    <Card className={cx("flex h-full flex-col overflow-hidden", wide && "lg:flex-row-reverse")}>
       {Visual ? (
-        <div className="viz">
+        <div className={cx("viz", wide && "viz-side")}>
           <Visual />
         </div>
       ) : null}
-      <div className="flex flex-1 flex-col gap-4 p-6">
+      <div className="flex min-w-0 flex-1 flex-col gap-4 p-6">
         <div className="flex items-start justify-between gap-4">
           <p className={cx("font-mono text-[11px] uppercase tracking-widest", TONE_TEXT[category?.tone ?? "zinc"])}>
             {category?.label ?? "Project"}
@@ -1668,33 +1738,12 @@ function Projects() {
                   <code className="font-mono text-zinc-200">featured: false</code> and it shows up here.
                 </p>
               ) : (
-                <ul className="flex flex-col divide-y divide-white/[0.06]">
-                  {archive.map((project) => {
-                    const category = C.categories.find((c) => c.id === project.category);
-                    return (
-                      <li key={project.id} className="flex flex-col gap-2 py-4 first:pt-0 last:pb-0">
-                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                          <span className="font-semibold text-zinc-50">{project.name}</span>
-                          <span className={cx("font-mono text-[11px]", TONE_TEXT[category?.tone ?? "zinc"])}>
-                            {category?.label}
-                          </span>
-                          {safeHref(project.repo) ? (
-                            <ExternalLink href={project.repo} className="link-arrow ml-auto">
-                              Repo <ArrowUpRight size={13} aria-hidden="true" />
-                            </ExternalLink>
-                          ) : null}
-                        </div>
-                        <p className="max-w-[75ch] text-sm leading-relaxed text-zinc-400">{project.description}</p>
-                        <ul className="flex flex-wrap gap-2">
-                          {project.tags.map((tag) => (
-                            <li key={tag}>
-                              <Pill>{tag}</Pill>
-                            </li>
-                          ))}
-                        </ul>
-                      </li>
-                    );
-                  })}
+                <ul className="flex flex-col gap-4">
+                  {archive.map((project) => (
+                    <li key={project.id}>
+                      <ProjectCard project={project} wide />
+                    </li>
+                  ))}
                 </ul>
               )}
             </div>
@@ -1905,8 +1954,8 @@ function ResumeSheet({ onPrint, onCopy }) {
 
 function Experience({ view, setView, onPrint, onCopyResume }) {
   const views = [
-    { id: "timeline", label: "Timeline View", Icon: List },
-    { id: "sheet", label: "Full Resume Sheet View", Icon: FileText },
+    { id: "timeline", label: "Timeline", Icon: List },
+    { id: "sheet", label: "Resume", Icon: FileText },
   ];
   return (
     <section id="experience" className="section">
