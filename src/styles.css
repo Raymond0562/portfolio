@@ -76,6 +76,50 @@ h2, h3 { text-wrap: balance; }
   mask-image: radial-gradient(ellipse 75% 65% at 50% 20%, #000 25%, transparent 78%);
 }
 
+/* ---- living backdrop ---- */
+.bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.bg > * { position: absolute; inset: 0; }
+.bg-aurora i {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  will-change: transform;
+  animation: drift 24s ease-in-out infinite alternate;
+}
+.bg-aurora i:nth-child(1) { width: 48vw; height: 48vw; left: -12vw; top: -20vw; background: rgba(99, 102, 241, 0.42); }
+.bg-aurora i:nth-child(2) { width: 40vw; height: 40vw; right: -12vw; top: 6vh; background: rgba(56, 189, 248, 0.26); animation-duration: 31s; animation-direction: alternate-reverse; }
+.bg-aurora i:nth-child(3) { width: 44vw; height: 44vw; left: 28vw; bottom: -30vw; background: rgba(16, 185, 129, 0.2); animation-duration: 37s; }
+@keyframes drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(9vw, 7vh, 0) scale(1.18); }
+}
+.bg-net { width: 100%; height: 100%; opacity: 0.75; }
+.bg-dots {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.13) 1px, transparent 1px);
+  background-size: 24px 24px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 30%, #000 30%, transparent 85%);
+  mask-image: radial-gradient(ellipse 90% 80% at 50% 30%, #000 30%, transparent 85%);
+}
+.bg-dots-hot {
+  background-image: radial-gradient(rgba(125, 211, 252, 0.95) 1.2px, transparent 1.2px);
+  -webkit-mask-image: radial-gradient(240px circle at var(--px, 50%) var(--py, 30%), #000, transparent 75%);
+  mask-image: radial-gradient(240px circle at var(--px, 50%) var(--py, 30%), #000, transparent 75%);
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+.bg.has-pointer .bg-dots-hot { opacity: 1; }
+.bg-fade { background: linear-gradient(to bottom, transparent 55%, rgba(9, 9, 11, 0.75)); }
+.shell { z-index: 1; }
+.section { position: relative; }
+.section::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.6), rgba(56, 189, 248, 0.6), transparent);
+}
+@media print { .section::before { display: none; } }
+
 /* ---- header ---- */
 .site-header { top: calc(env(safe-area-inset-top, 0px) + 12px); padding-top: 12px; }
 .nav-link {
@@ -128,7 +172,7 @@ h2, h3 { text-wrap: balance; }
 /* ---- card with spotlight ---- */
 .card {
   position: relative;
-  background: var(--surface);
+  background: rgba(18, 18, 21, 0.86);
   border: 1px solid var(--line);
   border-radius: 18px;
   transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.3s;

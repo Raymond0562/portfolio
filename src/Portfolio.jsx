@@ -2148,6 +2148,133 @@ function CommandPalette({ open, onClose, items }) {
  * App
  * -------------------------------------------------------------------------- */
 
+/** Fixed backdrop: drifting colour glows, a dot grid that lights up under the
+ *  cursor, and a slow network of nodes and links drawn on a canvas. */
+function Background() {
+  const rootRef = useRef(null);
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return undefined;
+    let frame = 0;
+    let x = 0;
+    let y = 0;
+    const onMove = (event) => {
+      x = event.clientX;
+      y = event.clientY;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        el.style.setProperty("--px", `${x}px`);
+        el.style.setProperty("--py", `${y}px`);
+        el.classList.add("has-pointer");
+      });
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!ctx) return undefined;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const LINK = 150;
+    let width = 0;
+    let height = 0;
+    let nodes = [];
+    let raf = 0;
+
+    const draw = () => {
+      ctx.clearRect(0, 0, width, height);
+      for (const node of nodes) {
+        if (!reduce) {
+          node.x += node.vx;
+          node.y += node.vy;
+          if (node.x < 0 || node.x > width) node.vx *= -1;
+          if (node.y < 0 || node.y > height) node.vy *= -1;
+        }
+      }
+      ctx.lineWidth = 1;
+      for (let i = 0; i < nodes.length; i += 1) {
+        for (let j = i + 1; j < nodes.length; j += 1) {
+          const dx = nodes[i].x - nodes[j].x;
+          const dy = nodes[i].y - nodes[j].y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < LINK) {
+            ctx.strokeStyle = `rgba(129, 160, 255, ${((1 - dist / LINK) * 0.28).toFixed(3)})`;
+            ctx.beginPath();
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            ctx.stroke();
+          }
+        }
+      }
+      for (const node of nodes) {
+        ctx.fillStyle = node.hot ? "rgba(52, 211, 153, 0.9)" : "rgba(226, 232, 255, 0.5)";
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.hot ? 2 : 1.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const count = Math.round(Math.min(72, Math.max(22, (width * height) / 24000)));
+      nodes = Array.from({ length: count }, (_, i) => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.3,
+        hot: i % 9 === 0,
+      }));
+      draw();
+    };
+
+    const loop = () => {
+      draw();
+      raf = requestAnimationFrame(loop);
+    };
+    const start = () => {
+      cancelAnimationFrame(raf);
+      if (!reduce && !document.hidden) raf = requestAnimationFrame(loop);
+    };
+
+    resize();
+    start();
+    window.addEventListener("resize", resize);
+    document.addEventListener("visibilitychange", start);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resize);
+      document.removeEventListener("visibilitychange", start);
+    };
+  }, []);
+
+  return (
+    <div ref={rootRef} className="bg print:hidden" aria-hidden="true">
+      <div className="bg-aurora">
+        <i />
+        <i />
+        <i />
+      </div>
+      <canvas ref={canvasRef} className="bg-net" />
+      <div className="bg-dots" />
+      <div className="bg-dots bg-dots-hot" />
+      <div className="bg-fade" />
+    </div>
+  );
+}
+
 export default function Portfolio() {
   const [view, setView] = useState("timeline");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -2253,7 +2380,7 @@ export default function Portfolio() {
 
   return (
     <div className="page">
-      <div className="bg-field print:hidden" aria-hidden="true" />
+      <Background />
       <div className="shell">
         <Header onNav={onNav} onOpenPalette={() => setPaletteOpen(true)} shortcut={shortcut} />
         <main>
