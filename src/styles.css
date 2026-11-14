@@ -461,6 +461,9 @@ h2, h3 { text-wrap: balance; }
 @keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { opacity: 0; transform: translateY(-8px) scale(0.98); } }
 
+.confirm-overlay { align-items: center; padding-top: 16px; }
+.confirm { max-width: 440px; }
+
 /* ---- toast ---- */
 .toast-region {
   position: fixed;

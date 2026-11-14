@@ -1872,16 +1872,16 @@ function SheetJob({ job }) {
   );
 }
 
-function ResumeSheet({ onCopy }) {
+function ResumeSheet({ onDownload, onCopy }) {
   const R = RESUME;
   const linkedin = safeHref(C.contact.linkedin);
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         {safeHref(C.contact.resumePdf) ? (
-          <ExternalLink href={C.contact.resumePdf} className="btn btn-primary" download="Raymond_Yang_Resume.pdf">
+          <button type="button" className="btn btn-primary" onClick={onDownload}>
             <Download size={15} aria-hidden="true" /> Download PDF
-          </ExternalLink>
+          </button>
         ) : null}
         <button type="button" className="btn btn-glass" onClick={onCopy}>
           <Copy size={15} aria-hidden="true" /> Copy as text
@@ -1957,7 +1957,7 @@ function ResumeSheet({ onCopy }) {
   );
 }
 
-function Experience({ view, setView, onCopyResume }) {
+function Experience({ view, setView, onDownload, onCopyResume }) {
   const views = [
     { id: "timeline", label: "Timeline", Icon: List },
     { id: "sheet", label: "Resume", Icon: FileText },
@@ -1981,7 +1981,7 @@ function Experience({ view, setView, onCopyResume }) {
             </button>
           ))}
         </div>
-        {view === "timeline" ? <Timeline /> : <ResumeSheet onCopy={onCopyResume} />}
+        {view === "timeline" ? <Timeline /> : <ResumeSheet onDownload={onDownload} onCopy={onCopyResume} />}
       </div>
     </section>
   );
@@ -2153,6 +2153,106 @@ function CommandPalette({ open, onClose, items }) {
  * App
  * -------------------------------------------------------------------------- */
 
+/** Asks before downloading the resume PDF, and says exactly what the file is. */
+function DownloadConfirm({ open, onClose, onConfirm }) {
+  const confirmRef = useRef(null);
+  const cancelRef = useRef(null);
+  const restoreRef = useRef(null);
+  const href = safeHref(C.contact.resumePdf);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    restoreRef.current = document.activeElement;
+    document.body.classList.add("is-locked");
+    const frame = requestAnimationFrame(() => confirmRef.current?.focus());
+    return () => {
+      cancelAnimationFrame(frame);
+      document.body.classList.remove("is-locked");
+      if (restoreRef.current instanceof HTMLElement) restoreRef.current.focus();
+    };
+  }, [open]);
+
+  if (!open || !href) return null;
+
+  const onKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+    } else if (event.key === "Tab") {
+      // Two controls: keep focus cycling between them.
+      event.preventDefault();
+      const next = document.activeElement === confirmRef.current ? cancelRef.current : confirmRef.current;
+      next?.focus();
+    }
+  };
+
+  return (
+    <div className="palette-overlay confirm-overlay print:hidden" onMouseDown={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="download-title"
+        aria-describedby="download-desc"
+        className="palette confirm"
+        onMouseDown={(event) => event.stopPropagation()}
+        onKeyDown={onKeyDown}
+      >
+        <div className="flex flex-col gap-5 p-6 sm:p-7">
+          <div className="flex items-start gap-4">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.04] text-sky-400">
+              <FileText size={20} aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2 id="download-title" className="text-xl font-semibold tracking-[-0.02em] text-zinc-50">
+                Download <span className="accent">resume</span>?
+              </h2>
+              <p id="download-desc" className="mt-1.5 text-sm leading-relaxed text-zinc-400">
+                This saves a one-page PDF of {C.name}'s resume to your device.
+              </p>
+            </div>
+          </div>
+
+          <dl className="grid grid-cols-3 gap-3 rounded-xl border border-white/[0.08] bg-black/25 p-4">
+            <div className="col-span-3 min-w-0">
+              <dt className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">file</dt>
+              <dd className="mt-1 break-all font-mono text-[12.5px] text-zinc-100">Raymond_Yang_Resume.pdf</dd>
+            </div>
+            <div>
+              <dt className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">type</dt>
+              <dd className="mt-1 font-mono text-[12.5px] text-zinc-100">PDF</dd>
+            </div>
+            <div>
+              <dt className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">pages</dt>
+              <dd className="mt-1 font-mono text-[12.5px] text-zinc-100">1</dd>
+            </div>
+            <div>
+              <dt className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">size</dt>
+              <dd className="mt-1 font-mono text-[12.5px] text-zinc-100">44 KB</dd>
+            </div>
+          </dl>
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button ref={cancelRef} type="button" className="btn btn-glass justify-center" onClick={onClose}>
+              Cancel
+            </button>
+            <a
+              ref={confirmRef}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              download="Raymond_Yang_Resume.pdf"
+              className="btn btn-primary justify-center"
+              onClick={onConfirm}
+            >
+              <Download size={15} aria-hidden="true" /> Download
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Fixed backdrop: drifting colour glows, a dot grid that lights up under the
  *  cursor, and a slow network of nodes and links drawn on a canvas. */
 function Background() {
@@ -2288,6 +2388,7 @@ export default function Portfolio() {
     if (window.location.hash === "#resume") setView("sheet");
   }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [downloadOpen, setDownloadOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const [shortcut, setShortcut] = useState("Ctrl K");
   const toastTimer = useRef(null);
@@ -2348,6 +2449,8 @@ export default function Portfolio() {
     notify(ok ? "Resume copied as plain text" : "Copy was blocked by the browser");
   }, [notify]);
 
+  const openDownload = useCallback(() => setDownloadOpen(true), []);
+
   const paletteItems = useMemo(() => {
     const github = safeHref(C.contact.github);
     const linkedin = safeHref(C.contact.linkedin);
@@ -2364,10 +2467,10 @@ export default function Portfolio() {
       { id: "copy-email", group: "Actions", label: "Copy email address", icon: Copy, run: onCopyEmail },
       { id: "copy-resume", group: "Actions", label: "Copy resume as text", icon: FileText, run: onCopyResume },
       github && { id: "github", group: "Links", label: "GitHub", hint: github.replace("https://", ""), icon: Github, href: github },
-      resumePdf && { id: "resume-pdf", group: "Links", label: "Download resume (PDF)", icon: Download, href: resumePdf },
+      resumePdf && { id: "resume-pdf", group: "Actions", label: "Download resume (PDF)", icon: Download, run: openDownload },
       linkedin && { id: "linkedin", group: "Links", label: "LinkedIn", hint: linkedin.replace("https://", ""), icon: Linkedin, href: linkedin },
     ].filter(Boolean);
-  }, [onNav, onCopyEmail, onCopyResume]);
+  }, [onNav, onCopyEmail, onCopyResume, openDownload]);
 
   return (
     <div className="page">
@@ -2379,7 +2482,7 @@ export default function Portfolio() {
           <About />
           <Current />
           <Projects />
-          <Experience view={view} setView={setView} onCopyResume={onCopyResume} />
+          <Experience view={view} setView={setView} onDownload={openDownload} onCopyResume={onCopyResume} />
         </main>
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.08] py-8 font-mono text-xs text-zinc-500 print:hidden">
           <p>
@@ -2390,6 +2493,14 @@ export default function Portfolio() {
       </div>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={paletteItems} />
+      <DownloadConfirm
+        open={downloadOpen}
+        onClose={() => setDownloadOpen(false)}
+        onConfirm={() => {
+          setDownloadOpen(false);
+          notify("Download started: Raymond_Yang_Resume.pdf");
+        }}
+      />
 
       <div className="toast-region print:hidden" role="status" aria-live="polite">
         {toast ? (
