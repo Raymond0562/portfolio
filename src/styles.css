@@ -61,21 +61,6 @@ h2, h3 { text-wrap: balance; }
 .section { padding-block: 4.5rem; scroll-margin-top: 4.5rem; }
 #top, #resume { scroll-margin-top: 5.5rem; }
 
-/* Dot grid that fades out toward the edges, with a faint cool glow. */
-.bg-field {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 880px;
-  pointer-events: none;
-  background-image:
-    radial-gradient(ellipse 50% 40% at 70% 12%, rgba(99, 102, 241, 0.13), transparent 70%),
-    radial-gradient(ellipse 40% 35% at 25% 5%, rgba(56, 189, 248, 0.08), transparent 70%),
-    radial-gradient(rgba(255, 255, 255, 0.11) 1px, transparent 1px);
-  background-size: auto, auto, 24px 24px;
-  -webkit-mask-image: radial-gradient(ellipse 75% 65% at 50% 20%, #000 25%, transparent 78%);
-  mask-image: radial-gradient(ellipse 75% 65% at 50% 20%, #000 25%, transparent 78%);
-}
-
 /* ---- living backdrop ---- */
 .bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
 .bg > * { position: absolute; inset: 0; }
@@ -126,12 +111,22 @@ h2, h3 { text-wrap: balance; }
   -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 30%, #000 30%, transparent 85%);
   mask-image: radial-gradient(ellipse 90% 80% at 50% 30%, #000 30%, transparent 85%);
 }
-.bg-dots-hot {
+/* Bright dots under the cursor. A 480px patch that follows the pointer with
+ * a transform, so the compositor moves it and only the patch is repainted.
+ * (Moving a mask across a full-screen layer repainted the whole viewport on
+ * every pointer move.) JS shifts background-position by the same distance in
+ * reverse, which keeps these dots lined up with the fixed grid in .bg-dots. */
+.bg > .bg-dots-hot {
+  inset: 0 auto auto 0;
+  width: 480px;
+  height: 480px;
   background-image: radial-gradient(rgba(125, 211, 252, 0.95) 1.2px, transparent 1.2px);
-  -webkit-mask-image: radial-gradient(240px circle at var(--px, 50%) var(--py, 30%), #000, transparent 75%);
-  mask-image: radial-gradient(240px circle at var(--px, 50%) var(--py, 30%), #000, transparent 75%);
+  background-size: 24px 24px;
+  -webkit-mask-image: radial-gradient(240px circle at center, #000, transparent 75%);
+  mask-image: radial-gradient(240px circle at center, #000, transparent 75%);
   opacity: 0;
   transition: opacity 0.5s;
+  will-change: transform;
 }
 .bg.has-pointer .bg-dots-hot { opacity: 1; }
 .bg-fade { background: linear-gradient(to bottom, transparent 55%, rgba(9, 9, 11, 0.75)); }
@@ -234,6 +229,15 @@ h2, h3 { text-wrap: balance; }
     var(--surface);
 }
 
+/* Small upper-case caption on key/value pairs (was a five-utility string
+ * repeated in the JSX). */
+.kv-key {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #71717a;
+}
 .label {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -350,20 +354,6 @@ h2, h3 { text-wrap: balance; }
 
 .live-ping { animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite; }
 @keyframes ping { 75%, 100% { transform: scale(2.6); opacity: 0; } }
-
-.interest {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-inline: -0.6rem;
-  padding: 0.6rem;
-  border-radius: 10px;
-  color: #d4d4d8;
-  transition: background-color 0.2s, color 0.2s, transform 0.2s;
-}
-.interest svg { color: var(--dim); transition: color 0.2s; }
-.interest:hover { background: rgba(255, 255, 255, 0.04); color: var(--fg); transform: translateX(3px); }
-.interest:hover svg { color: var(--cyan); }
 
 /* ---- filters & search ---- */
 .filter-btn,
@@ -582,22 +572,6 @@ h2, h3 { text-wrap: balance; }
   line-height: 1;
 }
 
-/* ---- hero stats ---- */
-.stat-strip {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-.stat { padding: 1.5rem 1rem 1.5rem 0; }
-.stat:nth-child(even) { padding-left: 1.25rem; border-left: 1px solid var(--line); }
-.stat:nth-child(n + 3) { border-top: 1px solid var(--line); }
-@media (min-width: 768px) {
-  .stat-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .stat:nth-child(n + 3) { border-top: 0; }
-  .stat:nth-child(n + 2) { padding-left: 1.5rem; border-left: 1px solid var(--line); }
-}
-
 /* ---- about: radar, terms, coursework ---- */
 .radar {
   position: absolute;
@@ -650,13 +624,18 @@ h2, h3 { text-wrap: balance; }
   background: rgba(0, 0, 0, 0.25);
   animation: toast-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
+/* Vertical bars (see Fill in Portfolio.jsx). Each is drawn at full height
+ * inside this clipped track and slid into view with a transform, which the
+ * compositor animates without re-running layout. */
+.fill-v { display: block; overflow: hidden; width: 100%; height: 100%; }
 .term-bar {
   display: block;
   width: 100%;
-  height: 0;
+  height: 100%;
   border-radius: 4px 4px 0 0;
   background: var(--indigo);
-  transition: height 0.9s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.2s;
+  transform: translateY(100%);
+  transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.2s;
 }
 .term-bar.is-now {
   background: repeating-linear-gradient(135deg, rgba(16, 185, 129, 0.55) 0 4px, rgba(16, 185, 129, 0.18) 4px 8px);
@@ -711,12 +690,12 @@ h2, h3 { text-wrap: balance; }
 }
 .bar-v {
   display: block;
-  width: 70%;
-  max-width: 22px;
-  height: 0;
+  width: 100%;
+  height: 100%;
   border-radius: 4px 4px 0 0;
   background: var(--cyan);
-  transition: height 0.9s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.2s;
+  transform: translateY(100%);
+  transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.2s;
 }
 .viz-chip {
   padding: 0.2rem 0.5rem;
@@ -802,17 +781,17 @@ h2, h3 { text-wrap: balance; }
 .vlan-grid span.is-lit { background: var(--live); box-shadow: 0 0 8px rgba(16, 185, 129, 0.7); animation: lit 2.4s ease-in-out infinite; }
 .vlan-grid span.is-lit:nth-child(odd) { animation-delay: 1.2s; }
 @keyframes lit { 50% { opacity: 0.45; } }
-.pipeline li + li { position: relative; }
 
-/* Reduced motion: drop the large movement (scroll reveals, drifting backdrop,
-   lifts and pops). Small in-place indicators such as the packet dot and the
-   status blink keep running. */
+/* Reduced motion: drop the large movement (the slide on scroll reveals, the
+   drifting backdrop, lifts and pops). Content still fades in as it is
+   scrolled to, since a fade involves no movement. Small in-place indicators
+   such as the chart bars, the packet dot and the status blink keep running. */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .reveal { opacity: 1; transform: none; transition: none; }
+  .reveal { transform: none; transition: opacity 0.6s ease; }
   .bg-aurora i, .radar i, .palette, .palette-overlay, .toast, .term-panel, .term-body > * { animation: none !important; }
-  .card, .btn, .hobby, .pill, .interest, .pcard { transition: none; }
-  .card:hover, .btn:hover, .hobby:hover, .pill:hover, .interest:hover { transform: none; }
+  .card, .btn, .hobby, .pill, .pcard { transition: none; }
+  .card:hover, .btn:hover, .hobby:hover, .pill:hover { transform: none; }
 }
 
 /* Print: only the resume sheet, sized to fit one US Letter page. */

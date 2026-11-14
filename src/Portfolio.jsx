@@ -1,9 +1,47 @@
 /* ============================================================================
  * Raymond Yang — portfolio
- * React + Tailwind CSS + lucide-react. Edit PORTFOLIO_CONFIG / PROJECTS_DATA
- * below; nothing else needs to change to update content.
+ * React 18 + Tailwind CSS + lucide-react, built with Vite. One page, one file.
  *
- * SECURITY NOTES
+ * HOW THIS FILE IS LAID OUT (top to bottom)
+ *   1. Content      RESUME, PORTFOLIO_CONFIG, PROJECTS_DATA and the small data
+ *                   tables the project drawings use. Plain objects, no logic.
+ *   2. Security     safeHref / displayUrl / sanitizeQuery / copyText.
+ *   3. Primitives   ExternalLink, Reveal, Card, Pill, SectionHead, LiveDot.
+ *   4. Sections     Header, Hero (+ terminal), About (+ LiveClock), Current,
+ *                   project drawings, Projects, Experience (timeline + resume
+ *                   sheet), CommandPalette, DownloadConfirm.
+ *   5. Backdrop     CONSTELLATIONS data, its projection, and Background.
+ *   6. Portfolio    The root component. It owns the only shared state (which
+ *                   experience view is showing, which dialog is open, the
+ *                   toast) and hands stable callbacks down.
+ *
+ * HOW TO UPDATE CONTENT
+ * Search for "[EDIT HERE]". Every anchor sits on the object to change:
+ *   - Availability badge ........ PORTFOLIO_CONFIG.status (and the two matching
+ *                                 lines in PORTFOLIO_CONFIG.terminal)
+ *   - Current project ........... PORTFOLIO_CONFIG.current
+ *   - Projects .................. PROJECTS_DATA (featured: true = main grid,
+ *                                 featured: false = archive card)
+ *   - Experience timeline ....... PORTFOLIO_CONFIG.timeline
+ *   - Resume sheet .............. RESUME, then run `npm run resume-pdf` so the
+ *                                 downloadable PDF matches
+ * Nothing outside those objects needs to change to update what the page says.
+ *
+ * HOW THE PIECES CONNECT
+ * Portfolio renders Background, Header, the five sections and a footer. The
+ * sections read content straight from the module-level config, so they take
+ * almost no props, and each is wrapped in memo(): opening the palette or
+ * showing a toast re-renders Portfolio but none of the sections under it.
+ * Anything that changes many times a second (the clock, card spotlights, the
+ * constellation canvas, the packet animation) is kept out of React state and
+ * written to the DOM directly. See LiveClock, Card and Background for why.
+ * The two dialogs are only mounted while open.
+ *
+ * This file is also rendered once in Node as a build-time smoke test
+ * (build.mjs), so nothing may touch `window` or `document` during render.
+ * Browser-only reads go in effects or behind IN_BROWSER.
+ *
+ * SECURITY INVARIANTS (do not weaken; see section 2 for the details)
  *  - No dangerouslySetInnerHTML, innerHTML, eval, or Function anywhere.
  *    All text goes through React's JSX escaping.
  *  - Every href passes through safeHref(): https: and mailto: only, plus
@@ -39,7 +77,7 @@
  * 'strict-dynamic'. A static Vite build can use the policy above as written.
  * ========================================================================== */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   ArrowRight,
@@ -70,7 +108,8 @@ import {
  * CONFIG — the only place content lives
  * -------------------------------------------------------------------------- */
 
-/* The resume, transcribed from raymond_yang_resume.pdf. The Resume Sheet view
+/* [EDIT HERE] Resume content.
+ * The resume, transcribed from raymond_yang_resume.pdf. The Resume Sheet view
  * and the timeline both read from this, so edit it in one place.
  * (Phone number left out on purpose: this page is public.) */
 export const RESUME = {
@@ -161,6 +200,9 @@ export const RESUME = {
   ],
 };
 
+/** Looks up a resume job by id so the timeline reuses its wording instead of
+ *  keeping a second copy. Throws at load time if the id is misspelled, which
+ *  is the point: a broken link between the two lists should not ship. */
 const resumeJob = (id) => [...RESUME.experience, ...RESUME.leadership].find((job) => job.id === id);
 
 export const PORTFOLIO_CONFIG = {
@@ -179,6 +221,8 @@ export const PORTFOLIO_CONFIG = {
   subheadline:
     "Undergraduate at Texas A&M University focused on cybersecurity, network engineering, embedded systems, and applied software engineering.",
 
+  // [EDIT HERE] Work availability. Shown in the badge above the name. The
+  // terminal below repeats both lines (the two `ok` rows); change them together.
   status: {
     primary: "Incoming SWE Co-Op @ Collins Aerospace (Jan 2027)",
     secondary: "Open to Summer 2028 Roles",
@@ -208,6 +252,7 @@ export const PORTFOLIO_CONFIG = {
   ],
 
   // Read-only terminal in the hero. stack.json is generated from `stack`.
+  // [EDIT HERE] The two `ok` lines mirror `status` above.
   terminal: [
     {
       id: "profile.sh",
@@ -403,6 +448,8 @@ export const PORTFOLIO_CONFIG = {
     },
   ],
 
+  // [EDIT HERE] The "What I'm building right now" card. Replace the whole
+  // object when the primary project changes; `repo` may stay "" while private.
   current: {
     name: "EasyVote",
     tagline: "Local AI Nonpartisan Voting & Civic Assistant",
@@ -425,6 +472,8 @@ export const PORTFOLIO_CONFIG = {
     repo: "", // private for now; add the https URL when it opens up
   },
 
+  // Project categories: the filter buttons and each card's coloured label.
+  // A project's `category` must be one of these ids.
   categories: [
     { id: "security", label: "Cybersecurity & Networking", tone: "cyan" },
     { id: "ml", label: "Machine Learning & Data", tone: "indigo" },
@@ -432,6 +481,9 @@ export const PORTFOLIO_CONFIG = {
     { id: "embedded", label: "Embedded & Hardware", tone: "emerald" },
   ],
 
+  // [EDIT HERE] Experience timeline. Add an entry anywhere in the list; it is
+  // sorted by `start`. `kind` picks the icon (work | edu | lead) and `badge`
+  // adds the green pill. Reuse resume wording with resumeJob(id) where it fits.
   // `start` (YYYY-MM) is only used to sort; `period` is what is shown.
   timeline: [
     {
@@ -489,7 +541,8 @@ export const PORTFOLIO_CONFIG = {
   ],
 };
 
-/* Central project list. `featured: true` shows in the main grid;
+/* [EDIT HERE] Add, remove or reorder projects.
+ * Central project list. `featured: true` shows in the main grid;
  * `featured: false` lands in the "More Projects / Archive" card.
  * Shape: { id, name, code?, org?, category, description, tags, repo?,
  *          visual?, featured }
@@ -497,8 +550,7 @@ export const PORTFOLIO_CONFIG = {
 export const PROJECTS_DATA = [
   {
     id: "world-cup",
-    name: "world_cup Predictor",
-    code: true,
+    name: "World Cup Predictor",
     category: "ml",
     visual: "odds",
     description:
@@ -627,12 +679,33 @@ const SEARCH_THROUGHPUT = [
  * Security helpers
  * -------------------------------------------------------------------------- */
 
+/* Everything a visitor can type, and every URL the page links to, goes
+ * through one of the helpers below. They are deliberately allowlists: the
+ * question each asks is "is this one of the few things we accept?", never
+ * "does this look dangerous?", because blocklists are what get bypassed
+ * (OWASP XSS Prevention and Unvalidated Redirects cheat sheets). The limits
+ * are constants up here so they are allocated once and easy to audit. */
 const ALLOWED_PROTOCOLS = ["https:", "mailto:"];
 const MAX_URL_LENGTH = 2048;
 const MAX_QUERY_LENGTH = 64;
 
-/** Returns a normalised URL if it is https:, mailto:, or a same-page #anchor;
- *  otherwise null. Callers must not render an href when this returns null. */
+/**
+ * The single gate every link target passes through (OWASP: validate URLs
+ * against an allowlist of schemes).
+ *
+ * Invariants:
+ *  - Only `https:` and `mailto:` are accepted, decided by the URL parser's own
+ *    `protocol` field. Checking the string prefix instead would let through
+ *    spellings such as "JaVaScRiPt:" or "java\tscript:" that browsers still run.
+ *  - Same-page anchors are accepted only as `#` plus letters, digits, `-` or
+ *    `_`, checked one character at a time (no RegExp).
+ *  - Relative URLs, `http:`, `javascript:`, `data:`, `blob:`, over-long input
+ *    and non-strings all return null.
+ *
+ * @param {unknown} raw Candidate URL, usually from the config objects.
+ * @returns {string|null} The normalised URL, or null. Callers must not render
+ *   an href when this returns null (ExternalLink falls back to plain text).
+ */
 export function safeHref(raw) {
   if (typeof raw !== "string") return null;
   const value = raw.trim();
@@ -655,7 +728,13 @@ export function safeHref(raw) {
   }
 }
 
-/** "https://www.site.com/x/" -> "site.com/x". Empty string if the URL is not allowed. */
+/**
+ * Shortens a URL for display: "https://www.site.com/x/" -> "site.com/x".
+ * It validates first, so text shown as a link can never differ from a target
+ * that safeHref would refuse.
+ * @param {unknown} raw
+ * @returns {string} Display text, or "" if the URL is not allowed.
+ */
 export function displayUrl(raw) {
   let value = safeHref(raw) ?? "";
   for (const prefix of ["https://", "mailto:", "www."]) {
@@ -664,7 +743,22 @@ export function displayUrl(raw) {
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
-/** Length-caps input and drops control characters. Never used to build a RegExp. */
+/**
+ * Cleans text typed into the project search and the command palette (OWASP
+ * input validation: bound the length, drop characters with no legitimate use).
+ *
+ * Invariants:
+ *  - Output is at most `max` characters, so no later step can be made slow by
+ *    a huge paste.
+ *  - Control characters (below U+0020, and DEL) are removed.
+ *  - The result is only ever used with String.includes and rendered through
+ *    JSX. It is never turned into a RegExp, HTML, or a URL, so there is no
+ *    injection or ReDoS path from it.
+ *
+ * @param {unknown} raw
+ * @param {number} [max=MAX_QUERY_LENGTH]
+ * @returns {string}
+ */
 export function sanitizeQuery(raw, max = MAX_QUERY_LENGTH) {
   const text = String(raw ?? "").slice(0, max);
   let out = "";
@@ -675,6 +769,14 @@ export function sanitizeQuery(raw, max = MAX_QUERY_LENGTH) {
   return out;
 }
 
+/**
+ * Copies text to the clipboard. Tries the async Clipboard API first and falls
+ * back to a hidden textarea + execCommand for browsers or contexts that block
+ * it. The textarea is hidden with a class, not an inline style, to stay inside
+ * the `style-src 'self'` policy.
+ * @param {string} text
+ * @returns {Promise<boolean>} Whether the copy succeeded. Never throws.
+ */
 async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
@@ -700,13 +802,33 @@ async function copyText(text) {
  * Small building blocks
  * -------------------------------------------------------------------------- */
 
+/* Everything below this line is module-level on purpose. Config, lookup
+ * tables and derived lists are built once when the file loads; a component
+ * that built them in its body would allocate them again on every render and
+ * hand children a "new" prop each time, defeating memo(). */
 const C = PORTFOLIO_CONFIG;
+/** Joins class names, skipping falsy ones: cx("a", open && "b"). */
 const cx = (...parts) => parts.filter(Boolean).join(" ");
+
+/** False during the Node smoke render in build.mjs, where window is missing. */
+const IN_BROWSER = typeof window !== "undefined";
+/** Category id -> category, so cards do not scan the list on every render. */
+const CATEGORY_BY_ID = new Map(C.categories.map((category) => [category.id, category]));
 
 const TONE_TEXT = { cyan: "text-sky-400", indigo: "text-indigo-400", zinc: "text-zinc-300", emerald: "text-emerald-400" };
 const TONE_DOT = { cyan: "bg-sky-400", indigo: "bg-indigo-500", zinc: "bg-zinc-400", emerald: "bg-emerald-500" };
 
-/** External link. Renders plain text if the URL fails validation. */
+/**
+ * A link that leaves the site.
+ *
+ * Always opens in a new tab with rel="noopener noreferrer", so the opened page
+ * gets no `window.opener` handle back to this one (reverse tabnabbing) and no
+ * referrer. If the href fails safeHref the children render as plain text, so
+ * a bad URL in the config degrades to a label instead of a dangerous link.
+ *
+ * @param {{href: string, className?: string, children: React.ReactNode}} props
+ *   Extra props are passed to the anchor.
+ */
 function ExternalLink({ href, className, children, ...rest }) {
   const safe = safeHref(href);
   if (!safe) return <span className={className}>{children}</span>;
@@ -717,7 +839,18 @@ function ExternalLink({ href, className, children, ...rest }) {
   );
 }
 
-/** Fades content up when it scrolls into view. Stagger with `delay` (ms). */
+/**
+ * Fades its children up the first time they scroll into view.
+ *
+ * Uses one IntersectionObserver per instance and disconnects it after firing,
+ * so nothing listens to scroll. The animation is a CSS transition on opacity
+ * and transform only, which the compositor runs without layout. The stagger
+ * delay is written through the CSSOM because inline style attributes are
+ * blocked by the CSP.
+ *
+ * @param {{delay?: number, className?: string, children: React.ReactNode}} props
+ *   `delay` is in milliseconds.
+ */
 function Reveal({ delay = 0, className, children }) {
   const ref = useRef(null);
   const [shown, setShown] = useState(false);
@@ -748,16 +881,42 @@ function Reveal({ delay = 0, className, children }) {
   );
 }
 
-/** Surface with a mouse-tracking spotlight on the fill and the border. */
+/**
+ * The standard surface, with a spotlight that follows the mouse across its
+ * fill and border.
+ *
+ * Why no state: the pointer position changes on every mouse event. Holding it
+ * in useState would re-render the card and everything inside it (a project
+ * drawing, a whole section) up to 60 or more times a second. Instead the
+ * handler writes two CSS custom properties, --mx and --my, straight onto the
+ * element; the gradients in `.card::before` / `.card::after` read them. React
+ * never hears about the move, so the render cost is zero.
+ *
+ * Why requestAnimationFrame: a mouse can report faster than the screen draws.
+ * The handler only records the latest position; one callback per frame reads
+ * the card's box and writes the properties, so there is at most one layout
+ * read per frame however fast events arrive.
+ *
+ * @param {{className?: string, children: React.ReactNode}} props
+ */
 function Card({ className, children }) {
   const ref = useRef(null);
+  const frame = useRef(0);
+  const point = useRef({ x: 0, y: 0 });
   const onMove = useCallback((event) => {
-    const el = ref.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    el.style.setProperty("--mx", `${event.clientX - rect.left}px`);
-    el.style.setProperty("--my", `${event.clientY - rect.top}px`);
+    point.current.x = event.clientX;
+    point.current.y = event.clientY;
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      const el = ref.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      el.style.setProperty("--mx", `${point.current.x - rect.left}px`);
+      el.style.setProperty("--my", `${point.current.y - rect.top}px`);
+    });
   }, []);
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
   return (
     <div ref={ref} onMouseMove={onMove} className={cx("card", className)}>
       {children}
@@ -765,13 +924,22 @@ function Card({ className, children }) {
   );
 }
 
+/**
+ * Small monospace tag.
+ * @param {{children: React.ReactNode, tone?: "cyan"|"indigo"|"zinc"|"emerald"}} props
+ */
 function Pill({ children, tone }) {
   return <span className={cx("pill", tone && TONE_TEXT[tone])}>{children}</span>;
 }
 
-function SectionHead({ path, title, accent, blurb }) {
+/**
+ * Section heading: a "~/path" eyebrow, the title with an optional serif
+ * accent, and an optional one-line blurb.
+ * @param {{path: string, title: string, accent?: string, blurb?: string, className?: string}} props
+ */
+function SectionHead({ path, title, accent, blurb, className }) {
   return (
-    <Reveal className="mb-8 flex flex-col gap-3">
+    <Reveal className={cx("mb-8 flex flex-col gap-3", className)}>
       <p className="font-mono text-xs text-zinc-500">
         <span className="text-sky-400">~</span>/{path}
       </p>
@@ -784,6 +952,7 @@ function SectionHead({ path, title, accent, blurb }) {
   );
 }
 
+/** Pulsing green dot used on "live" badges. Pure CSS; the pulse animates transform and opacity only. */
 function LiveDot() {
   return (
     <span className="relative flex h-2 w-2 shrink-0">
@@ -797,7 +966,16 @@ function LiveDot() {
  * Header
  * -------------------------------------------------------------------------- */
 
-function Header({ onNav, onOpenPalette, shortcut }) {
+/**
+ * Floating pill navigation.
+ *
+ * Wrapped in memo with stable props, so it does not re-render when a dialog
+ * opens or a toast shows.
+ *
+ * @param {{onNav: (id: string) => void, onOpenPalette: () => void, shortcut: string}} props
+ *   `onNav` scrolls to a section id; `shortcut` is the key hint ("Ctrl K" or "⌘ K").
+ */
+const Header = memo(function Header({ onNav, onOpenPalette, shortcut }) {
   return (
     <header className="site-header sticky z-40 flex justify-center print:hidden">
       <nav
@@ -838,12 +1016,17 @@ function Header({ onNav, onOpenPalette, shortcut }) {
       </nav>
     </header>
   );
-}
+});
 
 /* ----------------------------------------------------------------------------
  * Hero + terminal
  * -------------------------------------------------------------------------- */
 
+/**
+ * One line of the hero terminal.
+ * @param {{line: {t: string, v: string, k?: string}, sep?: string}} props
+ *   `t` is the line type: cmd | ok | kv | sec | comment, anything else is plain output.
+ */
 function TerminalLine({ line, sep }) {
   switch (line.t) {
     case "cmd":
@@ -877,6 +1060,7 @@ function TerminalLine({ line, sep }) {
   }
 }
 
+/** Renders PORTFOLIO_CONFIG.stack as highlighted JSON, so the terminal's stack.json tab can never drift from the About section. */
 function StackJson() {
   const last = C.stack.length - 1;
   return (
@@ -900,6 +1084,10 @@ function StackJson() {
   );
 }
 
+/**
+ * Read-only terminal with tabs. Its body has a minimum height so switching
+ * tabs, or the first paint, cannot move the content below it (no layout shift).
+ */
 function TerminalCard() {
   const [active, setActive] = useState(C.terminal[0].id);
   const tab = C.terminal.find((t) => t.id === active) ?? C.terminal[0];
@@ -958,7 +1146,12 @@ function TerminalCard() {
   );
 }
 
-function Hero({ onNav, onCopyEmail }) {
+/**
+ * Top of the page: availability badge, name and headline, the two calls to
+ * action, contact links, and the terminal.
+ * @param {{onNav: (id: string) => void, onCopyEmail: () => void}} props
+ */
+const Hero = memo(function Hero({ onNav, onCopyEmail }) {
   return (
     <section id="top" className="grid grid-cols-1 items-center gap-10 pb-20 pt-14 lg:grid-cols-[1.1fr_0.9fr] lg:gap-14 lg:pt-20 print:hidden">
       <div className="flex min-w-0 flex-col items-start gap-6">
@@ -1056,56 +1249,130 @@ function Hero({ onNav, onCopyEmail }) {
       </Reveal>
     </section>
   );
-}
+});
 
 /* ----------------------------------------------------------------------------
  * About — bento
  * -------------------------------------------------------------------------- */
 
+/**
+ * The current time in a given zone, re-evaluated once a second.
+ *
+ * The interval is stopped while the tab is hidden (Page Visibility API) and
+ * the time is refreshed immediately on return, so a background tab does no
+ * work and never shows a stale time. The two Intl formatters are created once
+ * per time zone; constructing them is far more expensive than using them.
+ *
+ * @param {string} timeZone IANA zone, e.g. "America/Chicago".
+ * @returns {{hm: string, ss: string, zone: string, date: string}}
+ */
 function useClock(timeZone) {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  return useMemo(() => {
-    const pick = (parts, type) => parts.find((p) => p.type === type)?.value ?? "";
-    const t = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hourCycle: "h23",
-      timeZoneName: "short",
-    }).formatToParts(now);
-    const date = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    }).format(now);
-    return {
-      hm: `${pick(t, "hour")}:${pick(t, "minute")}`,
-      ss: pick(t, "second"),
-      zone: pick(t, "timeZoneName"), // CST in winter, CDT in summer
-      date,
+    let timer = 0;
+    const tick = () => setNow(Date.now());
+    const sync = () => {
+      clearInterval(timer);
+      if (document.hidden) return;
+      tick(); // catch up straight away when the tab comes back
+      timer = setInterval(tick, 1000);
     };
-  }, [now, timeZone]);
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, []);
+  const formats = useMemo(
+    () => ({
+      time: new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+        timeZoneName: "short",
+      }),
+      date: new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short", month: "short", day: "numeric" }),
+    }),
+    [timeZone]
+  );
+  return useMemo(() => {
+    const parts = formats.time.formatToParts(now);
+    const pick = (type) => parts.find((part) => part.type === type)?.value ?? "";
+    return {
+      hm: `${pick("hour")}:${pick("minute")}`,
+      ss: pick("second"),
+      zone: pick("timeZoneName"), // CST in winter, CDT in summer
+      date: formats.date.format(now),
+    };
+  }, [now, formats]);
 }
 
-/** A bar whose length is set through the CSSOM (no style attribute, CSP-safe). */
-function Fill({ pct, axis = "width", className, title }) {
+/**
+ * The ticking clock in the Location card.
+ *
+ * It exists as its own leaf component for one reason: the once-a-second state
+ * update lives here and nowhere else. When the clock was read inside About,
+ * every tick re-rendered the whole About section (biography, education chart,
+ * coursework, stack, hobbies). Now a tick re-renders two paragraphs.
+ *
+ * @param {{timeZone: string}} props
+ */
+const LiveClock = memo(function LiveClock({ timeZone }) {
+  const clock = useClock(timeZone);
+  return (
+    <div>
+      <p className="font-mono text-5xl font-medium tracking-[-0.04em] text-zinc-50 tabular-nums">
+        {clock.hm}
+        <span className="text-2xl text-zinc-500">:{clock.ss}</span>
+      </p>
+      <p className="mt-2 font-mono text-xs text-zinc-500">
+        {clock.date} · <span className="text-sky-400">{clock.zone}</span>
+      </p>
+    </div>
+  );
+});
+
+/**
+ * An animated bar. Its length is written through the CSSOM (no style
+ * attribute, so it is CSP-safe) and eased by a CSS transition.
+ *
+ * Vertical bars are laid out at full height inside a clipping track and slid
+ * into view with a transform, which the compositor animates without layout.
+ * Horizontal bars animate their width: the odds chart retargets them every
+ * 450ms, and the width transition is what gives it its continuous glide.
+ * There are only six of them and they pause off screen, so the layout cost
+ * is small.
+ *
+ * @param {{pct: number, axis?: "width"|"height", className?: string, trackClassName?: string, title?: string}} props
+ *   `pct` is 0-100 and is clamped. `className` styles the bar; `trackClassName`
+ *   sizes the track of a vertical bar.
+ */
+function Fill({ pct, axis = "width", className, trackClassName, title }) {
   const ref = useRef(null);
   useEffect(() => {
-    if (ref.current) ref.current.style[axis] = `${Math.max(0, Math.min(100, pct))}%`;
+    if (!ref.current) return;
+    const value = Math.max(0, Math.min(100, pct));
+    if (axis === "height") ref.current.style.transform = `translateY(${100 - value}%)`;
+    else ref.current.style.width = `${value}%`;
   }, [pct, axis]);
-  return <span ref={ref} className={className} title={title} />;
+  const bar = <span ref={ref} className={className} title={title} />;
+  return axis === "height" ? <span className={cx("fill-v", trackClassName)}>{bar}</span> : bar;
 }
 
+/** `icon` key on an interest -> its icon. */
 const INTEREST_ICONS = { bjj: Swords, lego: Blocks, read: BookOpen, hike: Mountain };
 
-function About() {
-  const clock = useClock(C.location.timeZone);
+/**
+ * About section: biography, location and clock, education with the per-term
+ * credit chart, coursework, technical stack and interests.
+ *
+ * The only state is which term's class list is open. The clock ticks inside
+ * LiveClock, so this large tree renders only on that click.
+ */
+const About = memo(function About() {
   const edu = C.education;
   const [openTerm, setOpenTerm] = useState(null);
   const activeTerm = edu.terms.find((term) => term.t === openTerm) ?? null;
@@ -1140,15 +1407,7 @@ function About() {
                 <LiveDot /> live
               </span>
             </div>
-            <div>
-              <p className="font-mono text-5xl font-medium tracking-[-0.04em] text-zinc-50 tabular-nums">
-                {clock.hm}
-                <span className="text-2xl text-zinc-500">:{clock.ss}</span>
-              </p>
-              <p className="mt-2 font-mono text-xs text-zinc-500">
-                {clock.date} · <span className="text-sky-400">{clock.zone}</span>
-              </p>
-            </div>
+            <LiveClock timeZone={C.location.timeZone} />
             <div className="flex flex-col gap-1.5">
               <p className="flex items-center gap-2 text-zinc-50">
                 <MapPin size={15} className="text-zinc-500" aria-hidden="true" /> {C.location.city}
@@ -1170,7 +1429,7 @@ function About() {
               </div>
               <p className="text-right">
                 <span className="block font-serif text-6xl leading-none text-zinc-50">{edu.gpa}</span>
-                <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">GPA / 4.00</span>
+                <span className="kv-key">GPA / 4.00</span>
               </p>
             </div>
 
@@ -1185,7 +1444,7 @@ function About() {
                         type="button"
                         className={cx("term-btn", isOpen && "is-open")}
                         aria-expanded={isOpen}
-                        aria-controls="term-panel"
+                        aria-controls="term-classes"
                         aria-label={`${term.full}: ${term.hours} credit hours${term.now ? ", in progress" : `, GPA ${term.gpa}`}. Show classes.`}
                         onClick={() => setOpenTerm(isOpen ? null : term.t)}
                       >
@@ -1206,7 +1465,7 @@ function About() {
                   );
                 })}
               </ol>
-              <div id="term-panel" aria-live="polite">
+              <div id="term-classes" aria-live="polite">
                 {activeTerm ? (
                   <div key={activeTerm.t} className="term-panel">
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -1316,7 +1575,7 @@ function About() {
                     <h3 className="text-lg font-semibold tracking-[-0.02em] text-zinc-50">{item.label}</h3>
                     <p className="text-[14px] leading-relaxed text-zinc-400">{item.text}</p>
                     <p className="mt-auto flex flex-col gap-1 border-t border-white/[0.08] pt-3">
-                      <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">{item.meta.k}</span>
+                      <span className="kv-key">{item.meta.k}</span>
                       <span className="font-serif text-xl italic leading-tight text-zinc-100">{item.meta.v}</span>
                     </p>
                   </li>
@@ -1328,129 +1587,150 @@ function About() {
       </div>
     </section>
   );
-}
+});
 
 /* ----------------------------------------------------------------------------
  * Current build
  * -------------------------------------------------------------------------- */
 
-function Current() {
+/** "What I'm building right now": the PORTFOLIO_CONFIG.current card. Static, so memo means it renders once. */
+const Current = memo(function Current() {
   const cur = C.current;
   return (
     <section id="current" className="section print:hidden">
       <SectionHead path="now" title="What I'm building" accent="right now" />
       <Reveal>
-        <Card className="current-card overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_1fr]">
-            <div className="flex min-w-0 flex-col gap-6 p-6 sm:p-9">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 font-mono text-[11px] text-emerald-300">
-                  <LiveDot /> {cur.status}
-                </span>
-                <span className="font-mono text-[11px] text-zinc-500">primary project</span>
-              </div>
-              <div>
-                <h3 className="font-serif text-6xl leading-none text-zinc-50 sm:text-7xl">{cur.name}</h3>
-                <p className="mt-3 text-lg tracking-[-0.01em] text-zinc-300">{cur.tagline}</p>
-              </div>
-              <p className="max-w-[65ch] leading-relaxed text-zinc-400">{cur.overview}</p>
-              <ul className="flex flex-wrap gap-2">
-                {cur.tags.map((tag) => (
-                  <li key={tag}>
-                    <Pill tone="cyan">{tag}</Pill>
+        <Card className="current-card grid grid-cols-1 overflow-hidden lg:grid-cols-[1.25fr_1fr]">
+          <div className="flex min-w-0 flex-col gap-6 p-6 sm:p-9">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 font-mono text-[11px] text-emerald-300">
+                <LiveDot /> {cur.status}
+              </span>
+              <span className="font-mono text-[11px] text-zinc-500">primary project</span>
+            </div>
+            <div>
+              <h3 className="font-serif text-6xl leading-none text-zinc-50 sm:text-7xl">{cur.name}</h3>
+              <p className="mt-3 text-lg tracking-[-0.01em] text-zinc-300">{cur.tagline}</p>
+            </div>
+            <p className="max-w-[65ch] leading-relaxed text-zinc-400">{cur.overview}</p>
+            <ul className="flex flex-wrap gap-2">
+              {cur.tags.map((tag) => (
+                <li key={tag}>
+                  <Pill tone="cyan">{tag}</Pill>
+                </li>
+              ))}
+            </ul>
+            {safeHref(cur.repo) ? (
+              <ExternalLink href={cur.repo} className="link-arrow">
+                View repository <ArrowUpRight size={14} aria-hidden="true" />
+              </ExternalLink>
+            ) : null}
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-7 border-t border-white/[0.08] bg-black/20 p-6 sm:p-9 lg:border-l lg:border-t-0">
+            <div className="flex flex-col gap-3">
+              <p className="label">How an answer is made</p>
+              <ol className="flex flex-col gap-1.5 font-mono text-[12.5px]">
+                {cur.pipeline.map((step, i) => (
+                  <li key={step} className="flex items-center gap-3">
+                    <span className="w-4 text-right text-zinc-600 tabular-nums">{i + 1}</span>
+                    <span
+                      className={cx(
+                        "flex-1 rounded-md border px-3 py-2",
+                        i === cur.pipeline.length - 1
+                          ? "border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-300"
+                          : "border-white/[0.08] bg-white/[0.02] text-zinc-300"
+                      )}
+                    >
+                      {step}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              <p className="font-mono text-[11px] text-zinc-500">every step runs on the user's own machine</p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <p className="label">On the bench</p>
+              <ul className="flex flex-col gap-2.5 text-sm leading-relaxed text-zinc-300">
+                {cur.workLog.map((item) => (
+                  <li key={item} className="flex gap-2.5">
+                    <span className="mt-[0.55em] h-1 w-1 shrink-0 rounded-full bg-sky-400" aria-hidden="true" />
+                    {item}
                   </li>
                 ))}
               </ul>
-              {safeHref(cur.repo) ? (
-                <ExternalLink href={cur.repo} className="link-arrow">
-                  View repository <ArrowUpRight size={14} aria-hidden="true" />
-                </ExternalLink>
-              ) : null}
             </div>
 
-            <div className="flex min-w-0 flex-col gap-7 border-t border-white/[0.08] bg-black/20 p-6 sm:p-9 lg:border-l lg:border-t-0">
-              <div className="flex flex-col gap-3">
-                <p className="label">How an answer is made</p>
-                <ol className="pipeline flex flex-col gap-1.5 font-mono text-[12.5px]">
-                  {cur.pipeline.map((step, i) => (
-                    <li key={step} className="flex items-center gap-3">
-                      <span className="w-4 text-right text-zinc-600 tabular-nums">{i + 1}</span>
-                      <span
-                        className={cx(
-                          "flex-1 rounded-md border px-3 py-2",
-                          i === cur.pipeline.length - 1
-                            ? "border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-300"
-                            : "border-white/[0.08] bg-white/[0.02] text-zinc-300"
-                        )}
-                      >
-                        {step}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-                <p className="font-mono text-[11px] text-zinc-500">every step runs on the user's own machine</p>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <p className="label">On the bench</p>
-                <ul className="flex flex-col gap-2.5 text-sm leading-relaxed text-zinc-300">
-                  {cur.workLog.map((item) => (
-                    <li key={item} className="flex gap-2.5">
-                      <span className="mt-[0.55em] h-1 w-1 shrink-0 rounded-full bg-sky-400" aria-hidden="true" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <dl className="mt-auto grid grid-cols-3 gap-3 border-t border-white/[0.08] pt-5">
-                {cur.facts.map((fact) => (
-                  <div key={fact.k} className="min-w-0">
-                    <dt className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">{fact.k}</dt>
-                    <dd className="mt-1 font-mono text-[12.5px] text-zinc-50">{fact.v}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
+            <dl className="mt-auto grid grid-cols-3 gap-3 border-t border-white/[0.08] pt-5">
+              {cur.facts.map((fact) => (
+                <div key={fact.k} className="min-w-0">
+                  <dt className="kv-key">{fact.k}</dt>
+                  <dd className="mt-1 font-mono text-[12.5px] text-zinc-50">{fact.v}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
         </Card>
       </Reveal>
     </section>
   );
-}
+});
 
 /* ----------------------------------------------------------------------------
  * Project visuals — one small drawing per featured project
  * -------------------------------------------------------------------------- */
 
+/** Caption line under a project drawing. */
 function VizCaption({ children }) {
   return <p className="font-mono text-[10.5px] text-zinc-500">{children}</p>;
 }
 
-/** Steps 0..count-1 on a timer. Pauses while the visual is off screen or the tab is hidden. */
+/**
+ * Reports whether an element is in the viewport.
+ * Used to pause animations nobody can see.
+ * @param {Element|null} el
+ * @param {(onScreen: boolean) => void} onChange
+ * @returns {() => void} Stops watching.
+ */
+function watchOnScreen(el, onChange) {
+  if (!el || !("IntersectionObserver" in window)) return () => {};
+  const io = new IntersectionObserver((entries) => onChange(entries[entries.length - 1].isIntersecting));
+  io.observe(el);
+  return () => io.disconnect();
+}
+
+/**
+ * A counter that advances 0..count-1 on a timer and wraps; the clock behind
+ * most project drawings.
+ *
+ * It does not advance while the drawing is off screen or the tab is hidden,
+ * so the cards below the fold cost nothing until they are scrolled to.
+ *
+ * @param {number} count Number of steps in the loop.
+ * @param {number} ms Milliseconds per step.
+ * @param {React.RefObject<Element>} ref The drawing's root, watched for visibility.
+ * @returns {number} The current step.
+ */
 function useStep(count, ms, ref) {
   const [step, setStep] = useState(0);
   useEffect(() => {
     let visible = true;
-    const el = ref.current;
-    const io =
-      el && "IntersectionObserver" in window
-        ? new IntersectionObserver((entries) => {
-            visible = entries[0].isIntersecting;
-          })
-        : null;
-    io?.observe(el);
+    const unwatch = watchOnScreen(ref.current, (onScreen) => {
+      visible = onScreen;
+    });
     const timer = setInterval(() => {
       if (visible && !document.hidden) setStep((current) => (current + 1) % count);
     }, ms);
     return () => {
       clearInterval(timer);
-      io?.disconnect();
+      unwatch();
     };
   }, [count, ms, ref]);
   return step;
 }
 
+/** World Cup drawing: champion odds settling as the simulated run count grows. */
 function OddsVisual() {
   const ref = useRef(null);
   const RAMP = 14;
@@ -1484,6 +1764,7 @@ function OddsVisual() {
   );
 }
 
+/** Word-search drawing: search speed against the number of keywords searched at once. */
 function ThroughputVisual() {
   const ref = useRef(null);
   const step = useStep(SEARCH_THROUGHPUT.length, 1100, ref);
@@ -1503,6 +1784,7 @@ function ThroughputVisual() {
                 pct={(point.mbps / max) * 100}
                 title={`${point.x} keyword${point.x === 1 ? "" : "s"}: ${point.mbps.toLocaleString("en-US")} MB/s`}
                 className={cx("bar-v", i !== step && "is-dim")}
+                trackClassName="w-[70%] max-w-[22px]"
               />
             </span>
             <span className={cx("font-mono text-[10px] tabular-nums", i === step ? "text-zinc-100" : "text-zinc-500")}>
@@ -1523,7 +1805,10 @@ const VLAN_DEVICES = [
   { name: "drone-03", ok: true, cell: 88, vlan: 189 },
 ];
 const VLAN_BASE = [3, 17, 41, 66, 79];
+// The 100 cells never change, so the list is built once, not per animation step.
+const VLAN_CELLS = Array.from({ length: 100 }, (_, i) => i);
 
+/** VLAN drawing: devices join, are quarantined, attest, and are promoted into the trusted pool or left out. */
 function VlanVisual() {
   const ref = useRef(null);
   const PHASES = 4; // join, quarantine, attest, verdict
@@ -1543,7 +1828,6 @@ function VlanVisual() {
     "TPM attestation in progress…",
     device.ok ? `verified → trusted VLAN ${device.vlan}` : "attestation failed → stays quarantined",
   ][phase];
-  const cells = Array.from({ length: 100 }, (_, i) => i);
   return (
     <div ref={ref} className="flex w-full flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 font-mono text-[11px]">
@@ -1559,7 +1843,7 @@ function VlanVisual() {
         <span className={denied ? "text-rose-300" : phase === 3 ? "text-emerald-300" : "text-zinc-200"}>▸ {status}</span>
       </p>
       <div className="vlan-grid" aria-hidden="true">
-        {cells.map((i) => (
+        {VLAN_CELLS.map((i) => (
           <span key={i} className={cx(lit.has(i) && "is-lit", i === fresh && "is-fresh")} />
         ))}
       </div>
@@ -1568,6 +1852,13 @@ function VlanVisual() {
   );
 }
 
+/**
+ * Red-team drawing: a packet travelling ground station -> attacker -> drone.
+ *
+ * The dot moves every frame, so it is animated outside React: the loop sets
+ * SVG attributes directly and React renders this component once. The loop is
+ * parked while the drawing is off screen.
+ */
 function MitmVisual() {
   const rootRef = useRef(null);
   const dotRef = useRef(null);
@@ -1592,7 +1883,12 @@ function MitmVisual() {
     const started = performance.now();
     let raf = 0;
     let lastKey = "";
+    let visible = true;
     const tick = (now) => {
+      if (!visible) {
+        raf = 0; // parked; watchOnScreen below restarts it
+        return;
+      }
       const elapsed = now - started;
       const tamper = Math.floor(elapsed / LOOP_MS) % 3 === 1;
       const travelled = ((elapsed % LOOP_MS) / LOOP_MS) * total;
@@ -1619,7 +1915,14 @@ function MitmVisual() {
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    const unwatch = watchOnScreen(rootRef.current, (onScreen) => {
+      visible = onScreen;
+      if (visible && !raf) raf = requestAnimationFrame(tick);
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      unwatch();
+    };
   }, []);
   return (
     <div ref={rootRef} className="flex w-full flex-col items-center gap-1">
@@ -1644,6 +1947,7 @@ function MitmVisual() {
   );
 }
 
+/** Attestation drawing: the challenge / nonce / evidence exchange, then the verdict, alternating a clean and a tampered run. */
 function AttestVisual() {
   const ref = useRef(null);
   const PHASES = 5; // three messages, verdict, hold
@@ -1682,28 +1986,38 @@ function AttestVisual() {
   );
 }
 
-/** Where the ring buffer's indexes are after `step` ticks: frames arrive in
- *  bursts from the ISR, and the main loop drains them to UART more slowly. */
-function ringState(step) {
+/* The ring buffer animation is fully scripted, so both its history and its
+ * geometry are worked out once here instead of on each 200ms step.
+ * RING_STATES[step] is where the write and read indexes are after `step`
+ * ticks: frames arrive in bursts from the ISR, and the main loop drains them
+ * to UART more slowly. RING_SLOTS holds each slot's position on the circle. */
+const RING_STEPS = 192;
+const RING_STATES = (() => {
+  const states = [{ write: 0, read: 0 }];
   let write = 0;
   let read = 0;
-  for (let t = 1; t <= step; t += 1) {
+  for (let t = 1; t < RING_STEPS; t += 1) {
     const burst = t % 24 < 15;
     if (burst && write - read < 31) write += 1;
     if (read < write && (!burst || t % 2 === 0)) read += 1;
+    states.push({ write, read });
   }
-  return { write, read };
-}
+  return states;
+})();
+const RING_SLOTS = Array.from({ length: 32 }, (_, i) => {
+  const angle = (i / 32) * Math.PI * 2 - Math.PI / 2;
+  return { cx: (60 + Math.cos(angle) * 48).toFixed(2), cy: (60 + Math.sin(angle) * 48).toFixed(2) };
+});
 
+/** CAN-to-UART drawing: a 32-slot ring buffer filling from the interrupt and draining to UART. */
 function RingVisual() {
   const ref = useRef(null);
-  const step = useStep(192, 200, ref);
-  const { write, read } = ringState(step);
+  const step = useStep(RING_STEPS, 200, ref);
+  const { write, read } = RING_STATES[step];
   const pendingCount = write - read;
   const head = write % 32;
   const pending = new Set();
   for (let i = read; i < write; i += 1) pending.add(i % 32);
-  const slots = Array.from({ length: 32 }, (_, i) => i);
   const receiving = step % 24 < 15 && step > 0;
   return (
     <div ref={ref} className="flex w-full items-center justify-center gap-3 font-mono text-[10.5px]">
@@ -1713,15 +2027,14 @@ function RingVisual() {
         <span className="mt-1 block text-zinc-500 tabular-nums">in {write}</span>
       </p>
       <svg viewBox="0 0 120 120" className="h-[6.75rem] w-[6.75rem] shrink-0" role="img" aria-label="32-slot circular buffer filling from the interrupt and draining to UART">
-        {slots.map((i) => {
-          const angle = (i / 32) * Math.PI * 2 - Math.PI / 2;
+        {RING_SLOTS.map((slot, i) => {
           const isPending = pending.has(i);
           const isHead = i === head;
           return (
             <circle
               key={i}
-              cx={(60 + Math.cos(angle) * 48).toFixed(2)}
-              cy={(60 + Math.sin(angle) * 48).toFixed(2)}
+              cx={slot.cx}
+              cy={slot.cy}
               r={isPending ? 4 : 3}
               fill={isPending ? "#34d399" : "#121215"}
               stroke={isHead ? "#38bdf8" : isPending ? "#34d399" : "rgba(255,255,255,0.28)"}
@@ -1758,6 +2071,7 @@ const DATAPATH_PROGRAM = [
 const DATAPATH_FRAMES = DATAPATH_PROGRAM.flatMap((ins, index) => ins.uses.map((stage) => ({ index, stage })));
 const DATAPATH_OPS = ["ADD", "SUB", "AND", "ORR", "ADDI", "SUBI", "MOVZ", "LDUR", "STUR", "CBZ", "B"];
 
+/** ARMv8 drawing: which datapath stages each instruction uses within its single clock cycle. */
 function DatapathVisual() {
   const ref = useRef(null);
   const step = useStep(DATAPATH_FRAMES.length, 650, ref);
@@ -1814,6 +2128,10 @@ const CRAZY8_GAME = [
   { top: "K♦", hand: ["5♠"], ai: 3, text: "You play K♦. One card left!" },
 ];
 
+/**
+ * One face-up card, e.g. "8♠". Hearts and diamonds render red.
+ * @param {{card: string, className?: string}} props
+ */
 function PlayingCard({ card, className }) {
   const suit = card.slice(-1);
   const red = suit === "♥" || suit === "♦";
@@ -1825,6 +2143,7 @@ function PlayingCard({ card, className }) {
   );
 }
 
+/** Crazy-8 drawing: a short scripted hand between the player and the AI. */
 function CardsVisual() {
   const ref = useRef(null);
   const step = useStep(CRAZY8_GAME.length + 1, 1500, ref);
@@ -1879,6 +2198,7 @@ const SORT_FRAMES = SORT_FILES.flatMap((file) => {
   ];
 });
 
+/** File organizer drawing: files appear in Downloads and are moved into typed folders. */
 function SortVisual() {
   const ref = useRef(null);
   const step = useStep(SORT_FRAMES.length, 1000, ref);
@@ -1920,6 +2240,7 @@ function SortVisual() {
   );
 }
 
+/** `visual` key on a project -> the drawing shown at the top of its card. */
 const PROJECT_VISUALS = {
   datapath: DatapathVisual,
   cards: CardsVisual,
@@ -1936,8 +2257,18 @@ const PROJECT_VISUALS = {
  * Projects
  * -------------------------------------------------------------------------- */
 
-function ProjectCard({ project, wide = false }) {
-  const category = C.categories.find((c) => c.id === project.category);
+/**
+ * One project: drawing, category, name, description, tags and repository link.
+ *
+ * Memoised on the project object, which comes from the module-level
+ * PROJECTS_DATA and so never changes identity. Typing in the search box
+ * re-renders the grid, but each card that is still shown is skipped.
+ *
+ * @param {{project: object, wide?: boolean}} props
+ *   `wide` puts the drawing beside the text on large screens (archive list).
+ */
+const ProjectCard = memo(function ProjectCard({ project, wide = false }) {
+  const category = CATEGORY_BY_ID.get(project.category);
   const Visual = PROJECT_VISUALS[project.visual];
   return (
     <Card className={cx("flex h-full flex-col overflow-hidden", wide && "lg:flex-row-reverse")}>
@@ -1977,30 +2308,59 @@ function ProjectCard({ project, wide = false }) {
       </div>
     </Card>
   );
-}
+});
 
+/* Static inputs to the project grid, built once. PROJECT_SEARCH_TEXT is each
+ * project's searchable text, lower-cased ahead of time, so a keystroke costs
+ * a few String.includes calls rather than rebuilding and lower-casing every
+ * project's text. */
+const PROJECT_FILTERS = [{ id: "all", label: "All" }, ...C.categories];
+const ARCHIVE_PROJECTS = PROJECTS_DATA.filter((project) => !project.featured);
+const PROJECT_SEARCH_TEXT = new Map(
+  PROJECTS_DATA.map((project) => [
+    project.id,
+    [project.name, project.description, project.org ?? "", CATEGORY_BY_ID.get(project.category)?.label ?? "", ...project.tags]
+      .join(" ")
+      .toLowerCase(),
+  ])
+);
+
+/**
+ * Whether a project passes the category filter and contains every search token.
+ * @param {object} project
+ * @param {string} categoryId A category id, or "all".
+ * @param {string[]} tokens Lower-cased search words; all must match.
+ * @returns {boolean}
+ */
 function matchesProject(project, categoryId, tokens) {
   if (categoryId !== "all" && project.category !== categoryId) return false;
-  if (tokens.length === 0) return true;
-  const category = C.categories.find((c) => c.id === project.category);
-  const haystack = [project.name, project.description, project.org ?? "", category?.label ?? "", ...project.tags]
-    .join(" ")
-    .toLowerCase();
+  const haystack = PROJECT_SEARCH_TEXT.get(project.id) ?? "";
   return tokens.every((token) => haystack.includes(token));
 }
 
-function Projects() {
+/**
+ * Project grid with category filters, search, and the collapsible archive.
+ *
+ * The filtered list is memoised on the category and the search tokens. The
+ * archive's cards are not mounted until it is opened, which keeps their
+ * drawings (and their timers) out of the initial render.
+ */
+const Projects = memo(function Projects() {
   const [categoryId, setCategoryId] = useState("all");
   const [query, setQuery] = useState("");
   const [archiveOpen, setArchiveOpen] = useState(false);
 
+  // Memoised so opening the archive (unrelated state) does not re-filter,
+  // and so `featured` keeps its identity when nothing relevant changed.
   const tokens = useMemo(() => query.toLowerCase().split(" ").filter(Boolean).slice(0, 8), [query]);
   const featured = useMemo(
     () => PROJECTS_DATA.filter((p) => p.featured && matchesProject(p, categoryId, tokens)),
     [categoryId, tokens]
   );
-  const archive = useMemo(() => PROJECTS_DATA.filter((p) => !p.featured), []);
-  const filters = [{ id: "all", label: "All" }, ...C.categories];
+  const clearFilters = useCallback(() => {
+    setCategoryId("all");
+    setQuery("");
+  }, []);
 
   return (
     <section id="projects" className="section print:hidden">
@@ -2013,7 +2373,7 @@ function Projects() {
 
       <Reveal className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 py-1" role="group" aria-label="Filter by category">
-          {filters.map((filter) => (
+          {PROJECT_FILTERS.map((filter) => (
             <button
               key={filter.id}
               type="button"
@@ -2054,10 +2414,7 @@ function Projects() {
             <button
               type="button"
               className="link-arrow mx-auto mt-3"
-              onClick={() => {
-                setCategoryId("all");
-                setQuery("");
-              }}
+              onClick={clearFilters}
             >
               Clear filters
             </button>
@@ -2079,7 +2436,7 @@ function Projects() {
               <span className="min-w-0 flex-1">
                 <span className="block font-semibold tracking-[-0.02em] text-zinc-50">More Projects / Archive</span>
                 <span className="block font-mono text-xs text-zinc-500">
-                  {archive.length === 0 ? "slots open" : `${archive.length} more`}
+                  {ARCHIVE_PROJECTS.length === 0 ? "slots open" : `${ARCHIVE_PROJECTS.length} more`}
                 </span>
               </span>
               <ChevronDown
@@ -2089,7 +2446,7 @@ function Projects() {
               />
             </button>
             <div id="archive-panel" hidden={!archiveOpen} className="border-t border-white/[0.08] p-6">
-              {archive.length === 0 ? (
+              {!archiveOpen ? null : ARCHIVE_PROJECTS.length === 0 ? (
                 <p className="max-w-[65ch] text-sm leading-relaxed text-zinc-400">
                   Nothing archived yet. Add an entry to{" "}
                   <code className="font-mono text-zinc-200">PROJECTS_DATA</code> with{" "}
@@ -2097,7 +2454,7 @@ function Projects() {
                 </p>
               ) : (
                 <ul className="flex flex-col gap-4">
-                  {archive.map((project) => (
+                  {ARCHIVE_PROJECTS.map((project) => (
                     <li key={project.id}>
                       <ProjectCard project={project} wide />
                     </li>
@@ -2110,12 +2467,17 @@ function Projects() {
       </div>
     </section>
   );
-}
+});
 
 /* ----------------------------------------------------------------------------
  * Experience + resume
  * -------------------------------------------------------------------------- */
 
+/**
+ * The resume as plain text, for "Copy as text". Built from RESUME on demand
+ * rather than at load, since most visitors never ask for it.
+ * @returns {string}
+ */
 function buildResumeText() {
   const R = RESUME;
   const out = [C.name.toUpperCase()];
@@ -2141,12 +2503,18 @@ function buildResumeText() {
   return out.join("\n");
 }
 
+/** `kind` on a timeline entry -> its icon. */
 const TIMELINE_ICONS = { work: Briefcase, edu: GraduationCap, lead: Swords };
 
+// Both orders are sorted once here; the toggle just picks one.
 const TIMELINE_OLDEST_FIRST = [...C.timeline].sort((a, b) => a.start.localeCompare(b.start));
 const TIMELINE_LATEST_FIRST = [...TIMELINE_OLDEST_FIRST].reverse();
 
-function Timeline({ latestFirst }) {
+/**
+ * The experience timeline.
+ * @param {{latestFirst: boolean}} props Which of the two pre-sorted orders to show.
+ */
+const Timeline = memo(function Timeline({ latestFirst }) {
   const items = latestFirst ? TIMELINE_LATEST_FIRST : TIMELINE_OLDEST_FIRST;
   return (
     <ol className={cx("timeline flex flex-col gap-4", !latestFirst && "is-oldest-first")}>
@@ -2197,8 +2565,12 @@ function Timeline({ latestFirst }) {
       })}
     </ol>
   );
-}
+});
 
+/**
+ * A titled block of the resume sheet.
+ * @param {{title: string, children: React.ReactNode}} props
+ */
 function SheetSection({ title, children }) {
   return (
     <section className="flex flex-col gap-3">
@@ -2208,6 +2580,10 @@ function SheetSection({ title, children }) {
   );
 }
 
+/**
+ * Bullet list in the resume sheet.
+ * @param {{items: string[]}} props
+ */
 function SheetBullets({ items }) {
   return (
     <ul className="list-disc space-y-0.5 pl-5 text-[13px] leading-relaxed text-zinc-800">
@@ -2218,6 +2594,10 @@ function SheetBullets({ items }) {
   );
 }
 
+/**
+ * One job or leadership entry in the resume sheet.
+ * @param {{job: {org: string, place: string, role: string, period: string, bullets: string[]}}} props
+ */
 function SheetJob({ job }) {
   return (
     <div className="flex flex-col gap-1">
@@ -2233,7 +2613,14 @@ function SheetJob({ job }) {
   );
 }
 
-function ResumeSheet({ onDownload, onCopy }) {
+/**
+ * The resume laid out as a sheet of paper, with download and copy actions.
+ * This is also what prints: the print stylesheet hides everything else.
+ * Only mounted while the Resume view is selected.
+ *
+ * @param {{onDownload: () => void, onCopy: () => void}} props
+ */
+const ResumeSheet = memo(function ResumeSheet({ onDownload, onCopy }) {
   const R = RESUME;
   const linkedin = safeHref(C.contact.linkedin);
   return (
@@ -2316,23 +2703,32 @@ function ResumeSheet({ onDownload, onCopy }) {
       </article>
     </div>
   );
-}
+});
 
-function Experience({ view, setView, onDownload, onCopyResume }) {
-  const views = [
-    { id: "timeline", label: "Timeline", Icon: List },
-    { id: "sheet", label: "Resume", Icon: FileText },
-  ];
+/** The two views of the experience section. */
+const EXPERIENCE_VIEWS = [
+  { id: "timeline", label: "Timeline", Icon: List },
+  { id: "sheet", label: "Resume", Icon: FileText },
+];
+
+/**
+ * Experience section: a switch between the timeline and the resume sheet, plus
+ * the timeline's order toggle.
+ *
+ * `view` lives in Portfolio because the header's Experience and Resume links
+ * and the command palette set it too. Only the selected view is mounted.
+ *
+ * @param {{view: "timeline"|"sheet", setView: (view: string) => void, onDownload: () => void, onCopyResume: () => void}} props
+ */
+const Experience = memo(function Experience({ view, setView, onDownload, onCopyResume }) {
   const [latestFirst, setLatestFirst] = useState(true);
   return (
     <section id="experience" className="section">
-      <div className="print:hidden">
-        <SectionHead path="experience" title="Experience &" accent="education" />
-      </div>
+      <SectionHead path="experience" title="Experience &" accent="education" className="print:hidden" />
       <div id="resume" className="flex flex-col gap-6">
         <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
           <div className="segmented" role="group" aria-label="Choose a view">
-            {views.map(({ id, label, Icon }) => (
+            {EXPERIENCE_VIEWS.map(({ id, label, Icon }) => (
               <button
                 key={id}
                 type="button"
@@ -2359,46 +2755,54 @@ function Experience({ view, setView, onDownload, onCopyResume }) {
       </div>
     </section>
   );
-}
+});
 
 /* ----------------------------------------------------------------------------
  * Command palette
  * -------------------------------------------------------------------------- */
 
-function CommandPalette({ open, onClose, items }) {
+/**
+ * The Ctrl/Cmd+K command palette: a filter box over a list of actions and links.
+ *
+ * Mounted only while open (Portfolio renders it conditionally), so it costs
+ * nothing until used and starts with a clean query each time. On mount it
+ * remembers the focused element, locks page scroll and focuses the input; on
+ * unmount it undoes all three.
+ *
+ * @param {{onClose: () => void, items: Array<{id: string, group: string, label: string, hint?: string, icon: React.ComponentType, search: string, run?: () => void, href?: string}>}} props
+ *   An item with `href` renders as a real link; one with `run` as a button.
+ */
+function CommandPalette({ onClose, items }) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef(null);
   const listRef = useRef(null);
-  const restoreRef = useRef(null);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return items;
-    return items.filter((item) => `${item.label} ${item.hint ?? ""} ${item.group}`.toLowerCase().includes(q));
+    return items.filter((item) => item.search.includes(q));
   }, [items, query]);
 
   useEffect(() => {
-    if (!open) return undefined;
-    restoreRef.current = document.activeElement;
-    setQuery("");
-    setActive(0);
+    const restore = document.activeElement;
     document.body.classList.add("is-locked");
     const frame = requestAnimationFrame(() => inputRef.current?.focus());
     return () => {
       cancelAnimationFrame(frame);
       document.body.classList.remove("is-locked");
-      if (restoreRef.current instanceof HTMLElement) restoreRef.current.focus();
+      if (restore instanceof HTMLElement) restore.focus();
     };
-  }, [open]);
+  }, []);
 
+  // Keep the highlighted row in view while arrowing through a long list.
   useEffect(() => {
     const el = listRef.current?.querySelector('[data-active="true"]');
     el?.scrollIntoView({ block: "nearest" });
   }, [active, results]);
 
-  if (!open) return null;
-
+  // `active` can point past the end right after the list shrinks; clamp on
+  // read rather than fixing it up in an effect, which would cost a second render.
   const clamped = Math.min(active, Math.max(results.length - 1, 0));
 
   const run = (item) => {
@@ -2407,6 +2811,17 @@ function CommandPalette({ open, onClose, items }) {
     if (!item.href) item.run?.();
   };
 
+  /* Keyboard state machine. The only state is `active`, the highlighted row.
+   *   ArrowDown / ArrowUp   move the highlight one row and wrap at the ends
+   *   Enter                 click the highlighted row, so mouse and keyboard
+   *                         run exactly the same code (see `run`)
+   *   Escape                close; the effect above gives focus back
+   *   Tab                   swallowed, which keeps focus inside the dialog
+   *   any other key         types into the input; onChange filters the list
+   *                         and resets the highlight to the first row
+   * Focus never leaves the input. The highlighted row is announced through
+   * aria-activedescendant instead of by moving focus, which is the standard
+   * combobox pattern and avoids a focus change per arrow press. */
   const onKeyDown = (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -2527,26 +2942,31 @@ function CommandPalette({ open, onClose, items }) {
  * App
  * -------------------------------------------------------------------------- */
 
-/** Asks before downloading the resume PDF, and says exactly what the file is. */
-function DownloadConfirm({ open, onClose, onConfirm }) {
+/**
+ * Asks before downloading the resume PDF and says exactly what the file is.
+ * Mounted only while open. Focus is trapped between its two controls and
+ * returned to the opener on close.
+ *
+ * @param {{onClose: () => void, onConfirm: () => void}} props
+ */
+function DownloadConfirm({ onClose, onConfirm }) {
   const confirmRef = useRef(null);
   const cancelRef = useRef(null);
-  const restoreRef = useRef(null);
   const href = safeHref(C.contact.resumePdf);
 
   useEffect(() => {
-    if (!open) return undefined;
-    restoreRef.current = document.activeElement;
+    if (!href) return undefined;
+    const restore = document.activeElement;
     document.body.classList.add("is-locked");
     const frame = requestAnimationFrame(() => confirmRef.current?.focus());
     return () => {
       cancelAnimationFrame(frame);
       document.body.classList.remove("is-locked");
-      if (restoreRef.current instanceof HTMLElement) restoreRef.current.focus();
+      if (restore instanceof HTMLElement) restore.focus();
     };
-  }, [open]);
+  }, [href]);
 
-  if (!open || !href) return null;
+  if (!href) return null;
 
   const onKeyDown = (event) => {
     if (event.key === "Escape") {
@@ -2567,60 +2987,58 @@ function DownloadConfirm({ open, onClose, onConfirm }) {
         aria-modal="true"
         aria-labelledby="download-title"
         aria-describedby="download-desc"
-        className="palette confirm"
+        className="palette confirm flex flex-col gap-5 p-6 sm:p-7"
         onMouseDown={(event) => event.stopPropagation()}
         onKeyDown={onKeyDown}
       >
-        <div className="flex flex-col gap-5 p-6 sm:p-7">
-          <div className="flex items-start gap-4">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.04] text-sky-400">
-              <FileText size={20} aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <h2 id="download-title" className="text-xl font-semibold tracking-[-0.02em] text-zinc-50">
-                Download <span className="accent">resume</span>?
-              </h2>
-              <p id="download-desc" className="mt-1.5 text-sm leading-relaxed text-zinc-400">
-                This saves a one-page PDF of {C.name}'s resume to your device.
-              </p>
-            </div>
+        <div className="flex items-start gap-4">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.04] text-sky-400">
+            <FileText size={20} aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <h2 id="download-title" className="text-xl font-semibold tracking-[-0.02em] text-zinc-50">
+              Download <span className="accent">resume</span>?
+            </h2>
+            <p id="download-desc" className="mt-1.5 text-sm leading-relaxed text-zinc-400">
+              This saves a one-page PDF of {C.name}'s resume to your device.
+            </p>
           </div>
+        </div>
 
-          <dl className="grid grid-cols-3 gap-3 rounded-xl border border-white/[0.08] bg-black/25 p-4">
-            <div className="col-span-3 min-w-0">
-              <dt className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">file</dt>
-              <dd className="mt-1 break-all font-mono text-[12.5px] text-zinc-100">Raymond_Yang_Resume.pdf</dd>
-            </div>
-            <div>
-              <dt className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">type</dt>
-              <dd className="mt-1 font-mono text-[12.5px] text-zinc-100">PDF</dd>
-            </div>
-            <div>
-              <dt className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">pages</dt>
-              <dd className="mt-1 font-mono text-[12.5px] text-zinc-100">1</dd>
-            </div>
-            <div>
-              <dt className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">size</dt>
-              <dd className="mt-1 font-mono text-[12.5px] text-zinc-100">44 KB</dd>
-            </div>
-          </dl>
-
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <button ref={cancelRef} type="button" className="btn btn-glass justify-center" onClick={onClose}>
-              Cancel
-            </button>
-            <a
-              ref={confirmRef}
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              download="Raymond_Yang_Resume.pdf"
-              className="btn btn-primary justify-center"
-              onClick={onConfirm}
-            >
-              <Download size={15} aria-hidden="true" /> Download
-            </a>
+        <dl className="grid grid-cols-3 gap-3 rounded-xl border border-white/[0.08] bg-black/25 p-4">
+          <div className="col-span-3 min-w-0">
+            <dt className="kv-key">file</dt>
+            <dd className="mt-1 break-all font-mono text-[12.5px] text-zinc-100">Raymond_Yang_Resume.pdf</dd>
           </div>
+          <div>
+            <dt className="kv-key">type</dt>
+            <dd className="mt-1 font-mono text-[12.5px] text-zinc-100">PDF</dd>
+          </div>
+          <div>
+            <dt className="kv-key">pages</dt>
+            <dd className="mt-1 font-mono text-[12.5px] text-zinc-100">1</dd>
+          </div>
+          <div>
+            <dt className="kv-key">size</dt>
+            <dd className="mt-1 font-mono text-[12.5px] text-zinc-100">44 KB</dd>
+          </div>
+        </dl>
+
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button ref={cancelRef} type="button" className="btn btn-glass justify-center" onClick={onClose}>
+            Cancel
+          </button>
+          <a
+            ref={confirmRef}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            download="Raymond_Yang_Resume.pdf"
+            className="btn btn-primary justify-center"
+            onClick={onConfirm}
+          >
+            <Download size={15} aria-hidden="true" /> Download
+          </a>
         </div>
       </div>
     </div>
@@ -2792,9 +3210,14 @@ const CONSTELLATIONS = [
   },
 ];
 
-/** Flattens one constellation onto a plane (gnomonic projection about its own
- *  centre) the way it looks from the ground: north up, east to the left.
- *  Coordinates come back centred on 0 with the longer side spanning 1. */
+/**
+ * Flattens one constellation onto a plane (gnomonic projection about its own
+ * centre) the way it looks from the ground: north up, east to the left.
+ * @param {object} con An entry of CONSTELLATIONS.
+ * @returns {object} The entry plus `points`: one {x, y, r, hot} per star, with
+ *   coordinates centred on 0 and the longer side spanning 1, a radius from the
+ *   star's magnitude, and `hot` marking the brightest star.
+ */
 function projectConstellation(con) {
   const rad = Math.PI / 180;
   const sph = con.stars.map(([ra, dec]) => ({ ra: ra * 15 * rad, dec: dec * rad }));
@@ -2839,59 +3262,86 @@ function projectConstellation(con) {
   };
 }
 
+/** Every constellation projected once at load; Background only scales and places them. */
 const SKY = CONSTELLATIONS.map(projectConstellation);
 
-/** Fixed backdrop: drifting colour glows, a dot grid that lights up under the
- *  cursor, and real constellations drawn on a canvas. */
-function Background() {
+/**
+ * Fixed backdrop: drifting colour glows, a dot grid that lights up under the
+ * cursor, and real constellations drawn on a canvas.
+ *
+ * This is the busiest code on the page, so none of it goes through React. The
+ * component renders once; a single effect then owns everything:
+ *  - Pointer, scroll and resize handlers only record what happened. The work
+ *    is done at most once per frame in requestAnimationFrame callbacks.
+ *  - The canvas is repainted at full rate only while a constellation is moving
+ *    or the cursor has moved; otherwise it drops to 20fps for the twinkle.
+ *  - Layout is read only when something could have changed it (a resize, a
+ *    pointer move, a scroll), never on idle frames.
+ *  - The loop stops while the tab is hidden, and never starts if the visitor
+ *    asked for reduced motion (the sky is then drawn once, still).
+ */
+const Background = memo(function Background() {
   const rootRef = useRef(null);
+  const hotRef = useRef(null);
   const canvasRef = useRef(null);
   const labelRef = useRef(null);
 
   useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return undefined;
-    let frame = 0;
-    let x = 0;
-    let y = 0;
-    const onMove = (event) => {
-      x = event.clientX;
-      y = event.clientY;
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        el.style.setProperty("--px", `${x}px`);
-        el.style.setProperty("--py", `${y}px`);
-        el.classList.add("has-pointer");
-      });
-    };
-    window.addEventListener("pointermove", onMove, { passive: true });
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      cancelAnimationFrame(frame);
-    };
-  }, []);
-
-  useEffect(() => {
+    const root = rootRef.current;
+    const hot = hotRef.current;
     const canvas = canvasRef.current;
+    const label = labelRef.current;
     const ctx = canvas?.getContext("2d");
-    if (!ctx) return undefined;
+    if (!root || !hot || !label || !ctx) return undefined;
+
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const REACH = 110; // how close the cursor gets before a star feels it
+    const IDLE_FRAME_MS = 50; // repaint rate while the only motion is the twinkle (20fps)
+    const HOT_HALF = 240; // half the side of the .bg-dots-hot patch
+    const pointer = { x: 0, y: 0, active: false };
     let width = 0;
     let height = 0;
     let placed = [];
     let now = 0;
+    let lastPaint = 0;
     let raf = 0;
-    const pointer = { x: 0, y: 0, active: false };
-    const REACH = 110; // how close the cursor gets before a star feels it
+    let spotRaf = 0;
+    let resizeRaf = 0;
+    // Set by pointer and scroll events, cleared once a frame has used it. It
+    // gates every piece of work that only changes when the cursor or the page
+    // under it has moved.
+    let pointerDirty = false;
+    let pointerOnContent = null; // null = not worked out since the last move
+    let labelled = null;
+    let labelW = 0;
+    let labelH = 0;
+
+    // True when page content (text, a card, a control) is drawn at this point.
+    // The backdrop ignores pointer events, so it is never the element found.
+    const hasContentAt = (x, y) => {
+      const found = document.elementFromPoint(x, y);
+      if (!found) return false;
+      if (found.closest(".card, .sheet, .hobby, .palette, header, a, button, input, svg, img, canvas")) return true;
+      for (const node of found.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) return true;
+      }
+      return false;
+    };
+    // Hit-testing forces the browser to have layout ready, so do it at most
+    // once per pointer move and share the answer between push and label.
+    const isPointerOnContent = () => {
+      if (pointerOnContent === null) pointerOnContent = hasContentAt(pointer.x, pointer.y);
+      return pointerOnContent;
+    };
 
     // The cursor pushes on any star it comes near, and the push moves that
     // whole constellation, so the shape stays intact. A spring pulls each
     // figure back home once the cursor leaves. Only figures that sit wholly
     // in the side margins react (`free`): one that shares any width with the
     // content column stays put, so on a phone or a narrow window none move.
+    // Returns true while anything is still moving.
     const step = () => {
-      let pointerOnContent = null; // worked out at most once per frame
+      let moving = false;
       for (const sky of placed) {
         let fx = 0;
         let fy = 0;
@@ -2906,38 +3356,33 @@ function Background() {
               fy += (dy / dist) * push;
             }
           }
-        }
-        // No push while the cursor is on page content.
-        if (fx !== 0 || fy !== 0) {
-          if (pointerOnContent === null) pointerOnContent = hasContentAt(pointer.x, pointer.y);
-          if (pointerOnContent) {
+          // No push while the cursor is on page content.
+          if ((fx !== 0 || fy !== 0) && isPointerOnContent()) {
             fx = 0;
             fy = 0;
           }
         }
+        const pushed = fx !== 0 || fy !== 0;
+        if (!pushed && sky.ox === 0 && sky.oy === 0 && sky.vx === 0 && sky.vy === 0) continue; // at rest
         sky.vx = (sky.vx + fx - sky.ox * 0.012) * 0.9;
         sky.vy = (sky.vy + fy - sky.oy * 0.012) * 0.9;
         sky.ox += sky.vx;
         sky.oy += sky.vy;
+        // Close enough to home: snap, so the figure counts as at rest again.
+        if (!pushed && Math.abs(sky.ox) < 0.05 && Math.abs(sky.oy) < 0.05 && Math.abs(sky.vx) < 0.01 && Math.abs(sky.vy) < 0.01) {
+          sky.ox = 0;
+          sky.oy = 0;
+          sky.vx = 0;
+          sky.vy = 0;
+        }
+        moving = true;
       }
+      return moving;
     };
+
     // Names the constellation under the cursor. The label is a DOM node, not
     // canvas text, so the canvas's centre fade does not dim it.
-    const label = labelRef.current;
-    let labelled = null;
-    // True when page content (text, a card, a control) is drawn at this point.
-    // The backdrop ignores pointer events, so it is never the element found.
-    const hasContentAt = (x, y) => {
-      const found = document.elementFromPoint(x, y);
-      if (!found) return false;
-      if (found.closest(".card, .sheet, .hobby, .palette, header, a, button, input, svg, img, canvas")) return true;
-      for (const node of found.childNodes) {
-        if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) return true;
-      }
-      return false;
-    };
     const updateLabel = () => {
-      if (!label) return;
       const PAD = 16;
       let hit = null;
       let best = Infinity;
@@ -2957,14 +3402,17 @@ function Background() {
         }
       }
       // Hovering content that happens to sit over a figure is not hovering the figure.
-      if (hit && hasContentAt(pointer.x, pointer.y)) hit = null;
+      if (hit && isPointerOnContent()) hit = null;
       if (!hit) {
-        if (labelled) label.classList.remove("is-on");
+        label.classList.remove("is-on");
         labelled = null;
         return;
       }
       if (hit !== labelled) {
         label.textContent = hit.name;
+        // Measure once per name rather than every frame the label is shown.
+        labelW = label.offsetWidth;
+        labelH = label.offsetHeight;
         labelled = hit;
       }
       // Under the figure, or above it when there is no room below.
@@ -2973,20 +3421,10 @@ function Background() {
       const x = Math.min(Math.max((hit.minX + hit.maxX) / 2 + hit.ox, 70), Math.max(70, width - 70));
       label.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translateX(-50%)`;
       // Stay hidden while any content overlaps where the label would be.
-      const half = label.offsetWidth / 2;
-      const midY = y + label.offsetHeight / 2;
+      const half = labelW / 2;
+      const midY = y + labelH / 2;
       const covered = [x - half, x, x + half].some((px) => hasContentAt(px, midY));
       label.classList.toggle("is-on", !covered);
-    };
-    const onPointerMove = (event) => {
-      pointer.x = event.clientX;
-      pointer.y = event.clientY;
-      pointer.active = true;
-      if (reduce) updateLabel();
-    };
-    const onPointerGone = () => {
-      pointer.active = false;
-      updateLabel();
     };
 
     const draw = () => {
@@ -3013,7 +3451,8 @@ function Background() {
       }
     };
 
-    const resize = () => {
+    // Sizes the canvas and places every figure for the current window.
+    const layout = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       width = window.innerWidth;
       height = window.innerHeight;
@@ -3025,37 +3464,6 @@ function Background() {
         ? Math.min(width * 0.3, height * 0.2)
         : Math.max(90, Math.min(230, height * 0.2, width * 0.15));
       const clamp = (value, half, max) => Math.min(Math.max(value, half), Math.max(half, max - half));
-      placed = SKY.filter((sky) => !narrow || sky.narrowAt).map((sky, i) => {
-        const [fx, fy] = narrow ? sky.narrowAt : sky.at;
-        const size = base * sky.scale;
-        const cx = clamp(fx * width, size * 0.35, width);
-        const cy = clamp(fy * height, size * 0.35, height);
-        const angle = ((sky.tilt ?? 0) * Math.PI) / 180;
-        const cos = Math.cos(angle);
-        const sin = Math.sin(angle);
-        return {
-          name: sky.name,
-          lines: sky.lines,
-          ox: 0,
-          oy: 0,
-          vx: 0,
-          vy: 0,
-          stars: sky.points.map((point, j) => ({
-            x: cx + (point.x * cos - point.y * sin) * size,
-            y: cy + (point.x * sin + point.y * cos) * size,
-            r: point.r,
-            hot: point.hot,
-            speed: 900 + ((i * 7 + j * 13) % 9) * 160,
-            phase: i * 2.3 + j * 1.1,
-          })),
-        };
-      });
-      for (const sky of placed) {
-        sky.minX = Math.min(...sky.stars.map((star) => star.x));
-        sky.maxX = Math.max(...sky.stars.map((star) => star.x));
-        sky.minY = Math.min(...sky.stars.map((star) => star.y));
-        sky.maxY = Math.max(...sky.stars.map((star) => star.y));
-      }
       // The content column: the shell minus its side padding.
       const shell = document.querySelector(".shell");
       let contentLeft = 0;
@@ -3066,40 +3474,131 @@ function Background() {
         contentLeft = rect.left + (parseFloat(pad.paddingLeft) || 0);
         contentRight = rect.right - (parseFloat(pad.paddingRight) || 0);
       }
-      for (const sky of placed) {
-        sky.free = sky.maxX < contentLeft - 12 || sky.minX > contentRight + 12;
-      }
-      labelled = null;
+      placed = SKY.filter((sky) => !narrow || sky.narrowAt).map((sky, i) => {
+        const [fx, fy] = narrow ? sky.narrowAt : sky.at;
+        const size = base * sky.scale;
+        const cx = clamp(fx * width, size * 0.35, width);
+        const cy = clamp(fy * height, size * 0.35, height);
+        const angle = ((sky.tilt ?? 0) * Math.PI) / 180;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const stars = sky.points.map((point, j) => ({
+          x: cx + (point.x * cos - point.y * sin) * size,
+          y: cy + (point.x * sin + point.y * cos) * size,
+          r: point.r,
+          hot: point.hot,
+          speed: 900 + ((i * 7 + j * 13) % 9) * 160,
+          phase: i * 2.3 + j * 1.1,
+        }));
+        const xs = stars.map((star) => star.x);
+        const ys = stars.map((star) => star.y);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        return {
+          name: sky.name,
+          lines: sky.lines,
+          stars,
+          minX,
+          maxX,
+          minY: Math.min(...ys),
+          maxY: Math.max(...ys),
+          free: maxX < contentLeft - 12 || minX > contentRight + 12,
+          ox: 0,
+          oy: 0,
+          vx: 0,
+          vy: 0,
+        };
+      });
+      pointerOnContent = null;
       updateLabel();
       draw();
     };
 
-    const loop = (time) => {
+    // One frame. Physics runs every frame (it is a no-op at rest), but the
+    // canvas is only repainted at full rate while something is moving or the
+    // cursor has moved. When the twinkle is the only motion, 20fps is
+    // indistinguishable and saves two thirds of the full-screen repaints.
+    const frame = (time) => {
+      raf = requestAnimationFrame(frame);
+      if (pointerDirty) pointerOnContent = null;
+      const moving = step();
+      const busy = moving || pointerDirty;
+      if (!busy && time - lastPaint < IDLE_FRAME_MS) return;
+      if (busy) updateLabel();
+      pointerDirty = false;
       now = time;
-      step();
-      updateLabel();
+      lastPaint = time;
       draw();
-      raf = requestAnimationFrame(loop);
     };
     const start = () => {
       cancelAnimationFrame(raf);
-      if (!reduce && !document.hidden) raf = requestAnimationFrame(loop);
+      if (!reduce && !document.hidden) raf = requestAnimationFrame(frame);
     };
 
-    resize();
+    // Moves the bright-dot patch under the cursor. Only this 480px patch is
+    // repainted; the grid keeps its place because the background is shifted
+    // back by exactly the distance the patch moved.
+    const moveSpot = () => {
+      spotRaf = 0;
+      const tx = Math.round(pointer.x - HOT_HALF);
+      const ty = Math.round(pointer.y - HOT_HALF);
+      hot.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+      hot.style.backgroundPosition = `${-tx}px ${-ty}px`;
+      root.classList.add("has-pointer");
+      // With reduced motion there is no frame loop, so the label is kept up
+      // to date from here instead.
+      if (reduce) {
+        pointerOnContent = null;
+        pointerDirty = false;
+        updateLabel();
+      }
+    };
+    const onPointerMove = (event) => {
+      pointer.x = event.clientX;
+      pointer.y = event.clientY;
+      pointer.active = true;
+      pointerDirty = true;
+      if (!spotRaf) spotRaf = requestAnimationFrame(moveSpot);
+    };
+    const onPointerGone = () => {
+      pointer.active = false;
+      pointerDirty = true;
+      if (reduce) updateLabel();
+    };
+    // Scrolling changes what is under a cursor that has not moved.
+    const onScroll = () => {
+      pointerDirty = true;
+      if (reduce && pointer.active && !spotRaf) spotRaf = requestAnimationFrame(moveSpot);
+    };
+    // A drag-resize fires many events per frame; lay out once per frame.
+    const onResize = () => {
+      if (resizeRaf) return;
+      resizeRaf = requestAnimationFrame(() => {
+        resizeRaf = 0;
+        layout();
+      });
+    };
+
+    layout();
     start();
-    window.addEventListener("resize", resize);
-    document.addEventListener("visibilitychange", start);
+    // `passive` promises the browser these never call preventDefault, so
+    // scrolling and pointer input are never held up waiting on them.
+    window.addEventListener("resize", onResize, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("pointermove", onPointerMove, { passive: true });
-    document.documentElement.addEventListener("pointerleave", onPointerGone);
     window.addEventListener("blur", onPointerGone);
+    document.addEventListener("visibilitychange", start);
+    document.documentElement.addEventListener("pointerleave", onPointerGone);
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener("resize", resize);
-      document.removeEventListener("visibilitychange", start);
+      cancelAnimationFrame(spotRaf);
+      cancelAnimationFrame(resizeRaf);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onScroll);
       window.removeEventListener("pointermove", onPointerMove);
-      document.documentElement.removeEventListener("pointerleave", onPointerGone);
       window.removeEventListener("blur", onPointerGone);
+      document.removeEventListener("visibilitychange", start);
+      document.documentElement.removeEventListener("pointerleave", onPointerGone);
     };
   }, []);
 
@@ -3111,40 +3610,66 @@ function Background() {
         <i />
       </div>
       <div className="bg-dots" />
-      <div className="bg-dots bg-dots-hot" />
+      <div ref={hotRef} className="bg-dots-hot" />
       <div className="bg-fade" />
-      {/* Drawn last so the bottom fade does not dim the network. */}
+      {/* Drawn last so the bottom fade does not dim the constellations. */}
       <canvas ref={canvasRef} className="bg-net" />
       <div ref={labelRef} className="bg-sky-label" />
     </div>
   );
+});
+
+/**
+ * Which experience view to start on. Opening the site at #resume shows the
+ * resume sheet straight away. Read during the first render rather than in an
+ * effect, which would paint the timeline first and then swap it (a visible
+ * jump and a wasted render).
+ * @returns {"timeline"|"sheet"}
+ */
+function initialView() {
+  return IN_BROWSER && window.location.hash === "#resume" ? "sheet" : "timeline";
 }
 
-export default function Portfolio() {
-  const [view, setView] = useState("timeline");
+/**
+ * The palette's key hint for this platform, worked out once.
+ * @returns {string} "⌘ K" on macOS, otherwise "Ctrl K".
+ */
+function shortcutLabel() {
+  if (!IN_BROWSER) return "Ctrl K";
+  const platform = navigator.userAgentData?.platform ?? navigator.platform ?? "";
+  return platform.toLowerCase().includes("mac") ? "⌘ K" : "Ctrl K";
+}
 
-  // Opening the site at #resume shows the resume sheet straight away.
-  useEffect(() => {
-    if (window.location.hash === "#resume") setView("sheet");
-  }, []);
+/**
+ * Root component.
+ *
+ * Owns the only state shared across sections: the experience view, which
+ * dialog is open, and the toast. Everything it passes down is either that
+ * state or a useCallback-stable function, so the memoised sections re-render
+ * only when a prop they actually use changes.
+ */
+export default function Portfolio() {
+  const [view, setView] = useState(initialView);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [toast, setToast] = useState(null);
-  const [shortcut, setShortcut] = useState("Ctrl K");
+  const [shortcut] = useState(shortcutLabel);
   const toastTimer = useRef(null);
 
+  /* Every handler below is wrapped in useCallback so its identity survives
+   * re-renders. That is what lets the memo()-wrapped sections skip rendering
+   * when only the toast or a dialog changes. */
   const notify = useCallback((message) => {
     clearTimeout(toastTimer.current);
     setToast({ id: Date.now(), message });
     toastTimer.current = setTimeout(() => setToast(null), 3200);
   }, []);
 
-  useEffect(() => {
-    const platform = navigator.userAgentData?.platform ?? navigator.platform ?? "";
-    if (platform.toLowerCase().includes("mac")) setShortcut("⌘ K");
-    return () => clearTimeout(toastTimer.current);
-  }, []);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
+  // The one always-on key listener. It is a single comparison per keypress,
+  // and it cannot be passive because it must preventDefault the browser's own
+  // Ctrl/Cmd+K. The palette itself is not mounted until this opens it.
   useEffect(() => {
     const onKey = (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
@@ -3191,7 +3716,16 @@ export default function Portfolio() {
   }, [notify]);
 
   const openDownload = useCallback(() => setDownloadOpen(true), []);
+  const closeDownload = useCallback(() => setDownloadOpen(false), []);
+  const confirmDownload = useCallback(() => {
+    setDownloadOpen(false);
+    notify("Download started: Raymond_Yang_Resume.pdf");
+  }, [notify]);
+  const openPalette = useCallback(() => setPaletteOpen(true), []);
+  const closePalette = useCallback(() => setPaletteOpen(false), []);
 
+  // Built once: every dependency is a stable callback. `search` is each
+  // item's lower-cased text, precomputed so filtering does no string building.
   const paletteItems = useMemo(() => {
     const github = safeHref(C.contact.github);
     const linkedin = safeHref(C.contact.linkedin);
@@ -3210,14 +3744,16 @@ export default function Portfolio() {
       github && { id: "github", group: "Links", label: "GitHub", hint: github.replace("https://", ""), icon: Github, href: github },
       resumePdf && { id: "resume-pdf", group: "Actions", label: "Download resume (PDF)", icon: Download, run: openDownload },
       linkedin && { id: "linkedin", group: "Links", label: "LinkedIn", hint: linkedin.replace("https://", ""), icon: Linkedin, href: linkedin },
-    ].filter(Boolean);
+    ]
+      .filter(Boolean)
+      .map((item) => ({ ...item, search: `${item.label} ${item.hint ?? ""} ${item.group}`.toLowerCase() }));
   }, [onNav, onCopyEmail, onCopyResume, openDownload]);
 
   return (
     <div className="page">
       <Background />
       <div className="shell">
-        <Header onNav={onNav} onOpenPalette={() => setPaletteOpen(true)} shortcut={shortcut} />
+        <Header onNav={onNav} onOpenPalette={openPalette} shortcut={shortcut} />
         <main>
           <Hero onNav={onNav} onCopyEmail={onCopyEmail} />
           <About />
@@ -3233,15 +3769,8 @@ export default function Portfolio() {
         </footer>
       </div>
 
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={paletteItems} />
-      <DownloadConfirm
-        open={downloadOpen}
-        onClose={() => setDownloadOpen(false)}
-        onConfirm={() => {
-          setDownloadOpen(false);
-          notify("Download started: Raymond_Yang_Resume.pdf");
-        }}
-      />
+      {paletteOpen ? <CommandPalette onClose={closePalette} items={paletteItems} /> : null}
+      {downloadOpen ? <DownloadConfirm onClose={closeDownload} onConfirm={confirmDownload} /> : null}
 
       <div className="toast-region print:hidden" role="status" aria-live="polite">
         {toast ? (
