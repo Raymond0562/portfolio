@@ -988,7 +988,7 @@ const Header = memo(function Header({ onNav, onOpenPalette, shortcut }) {
             event.preventDefault();
             onNav("top");
           }}
-          className="ml-1 hidden h-7 w-7 items-center justify-center rounded-full bg-zinc-50 font-mono text-[11px] font-bold text-zinc-950 sm:flex"
+          className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-50 font-mono text-[11px] font-bold text-zinc-950"
           aria-label="Back to top"
         >
           {C.initials}
@@ -1008,11 +1008,15 @@ const Header = memo(function Header({ onNav, onOpenPalette, shortcut }) {
               </a>
             </li>
           ))}
+          {/* Inside the scrolling list, so on a narrow screen only the RY
+              button stays pinned and everything else scrolls past it. */}
+          <li className="ml-1 shrink-0">
+            <button type="button" onClick={onOpenPalette} className="kbd-btn" aria-label="Open command palette">
+              <Search size={13} aria-hidden="true" />
+              <kbd className="hidden font-mono text-[11px] sm:inline">{shortcut}</kbd>
+            </button>
+          </li>
         </ul>
-        <button type="button" onClick={onOpenPalette} className="kbd-btn" aria-label="Open command palette">
-          <Search size={13} aria-hidden="true" />
-          <kbd className="hidden font-mono text-[11px] sm:inline">{shortcut}</kbd>
-        </button>
       </nav>
     </header>
   );
@@ -3739,11 +3743,13 @@ export default function Portfolio() {
         icon: Hash,
         run: () => onNav(item.id),
       })),
+      // Keep each group's items together: the palette prints a group heading
+      // whenever the group changes from one row to the next.
+      github && { id: "github", group: "Links", label: "GitHub", hint: github.replace("https://", ""), icon: Github, href: github },
+      linkedin && { id: "linkedin", group: "Links", label: "LinkedIn", hint: linkedin.replace("https://", ""), icon: Linkedin, href: linkedin },
       { id: "copy-email", group: "Actions", label: "Copy email address", icon: Copy, run: onCopyEmail },
       { id: "copy-resume", group: "Actions", label: "Copy resume as text", icon: FileText, run: onCopyResume },
-      github && { id: "github", group: "Links", label: "GitHub", hint: github.replace("https://", ""), icon: Github, href: github },
       resumePdf && { id: "resume-pdf", group: "Actions", label: "Download resume (PDF)", icon: Download, run: openDownload },
-      linkedin && { id: "linkedin", group: "Links", label: "LinkedIn", hint: linkedin.replace("https://", ""), icon: Linkedin, href: linkedin },
     ]
       .filter(Boolean)
       .map((item) => ({ ...item, search: `${item.label} ${item.hint ?? ""} ${item.group}`.toLowerCase() }));
