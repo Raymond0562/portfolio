@@ -2277,6 +2277,11 @@ function Background() {
 
 export default function Portfolio() {
   const [view, setView] = useState("timeline");
+
+  // Opening the site at #resume shows the resume sheet straight away.
+  useEffect(() => {
+    if (window.location.hash === "#resume") setView("sheet");
+  }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const [shortcut, setShortcut] = useState("Ctrl K");
