@@ -50,6 +50,7 @@ import {
   Check,
   ChevronDown,
   Copy,
+  Download,
   CornerDownLeft,
   FileText,
   Github,
@@ -60,7 +61,6 @@ import {
   Mail,
   MapPin,
   Mountain,
-  Printer,
   Search,
   Swords,
 } from "lucide-react";
@@ -187,6 +187,9 @@ export const PORTFOLIO_CONFIG = {
     email: "raymondyang490@gmail.com",
     github: "https://github.com/Raymond0562",
     linkedin: "https://www.linkedin.com/in/raymond-yang-tamu/",
+    // One fixed PDF so the resume is identical on every device.
+    // Regenerate with `npm run resume-pdf` after editing RESUME.
+    resumePdf: "https://raymondyang.vercel.app/Raymond_Yang_Resume.pdf",
   },
 
   location: {
@@ -1869,15 +1872,17 @@ function SheetJob({ job }) {
   );
 }
 
-function ResumeSheet({ onPrint, onCopy }) {
+function ResumeSheet({ onCopy }) {
   const R = RESUME;
   const linkedin = safeHref(C.contact.linkedin);
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2 print:hidden">
-        <button type="button" className="btn btn-primary" onClick={onPrint}>
-          <Printer size={15} aria-hidden="true" /> Print / Save as PDF
-        </button>
+        {safeHref(C.contact.resumePdf) ? (
+          <ExternalLink href={C.contact.resumePdf} className="btn btn-primary" download="Raymond_Yang_Resume.pdf">
+            <Download size={15} aria-hidden="true" /> Download PDF
+          </ExternalLink>
+        ) : null}
         <button type="button" className="btn btn-glass" onClick={onCopy}>
           <Copy size={15} aria-hidden="true" /> Copy as text
         </button>
@@ -1952,7 +1957,7 @@ function ResumeSheet({ onPrint, onCopy }) {
   );
 }
 
-function Experience({ view, setView, onPrint, onCopyResume }) {
+function Experience({ view, setView, onCopyResume }) {
   const views = [
     { id: "timeline", label: "Timeline", Icon: List },
     { id: "sheet", label: "Resume", Icon: FileText },
@@ -1976,7 +1981,7 @@ function Experience({ view, setView, onPrint, onCopyResume }) {
             </button>
           ))}
         </div>
-        {view === "timeline" ? <Timeline /> : <ResumeSheet onPrint={onPrint} onCopy={onCopyResume} />}
+        {view === "timeline" ? <Timeline /> : <ResumeSheet onCopy={onCopyResume} />}
       </div>
     </section>
   );
@@ -2343,29 +2348,10 @@ export default function Portfolio() {
     notify(ok ? "Resume copied as plain text" : "Copy was blocked by the browser");
   }, [notify]);
 
-  const onPrint = useCallback(() => {
-    setView("sheet");
-    let opened = false;
-    const mark = () => {
-      opened = true;
-    };
-    window.addEventListener("beforeprint", mark, { once: true });
-    setTimeout(() => {
-      try {
-        window.print();
-      } catch {
-        /* handled by the check below */
-      }
-      setTimeout(() => {
-        window.removeEventListener("beforeprint", mark);
-        if (!opened) notify("Printing is blocked in this preview. It works on the deployed site.");
-      }, 500);
-    }, 60);
-  }, [notify]);
-
   const paletteItems = useMemo(() => {
     const github = safeHref(C.contact.github);
     const linkedin = safeHref(C.contact.linkedin);
+    const resumePdf = safeHref(C.contact.resumePdf);
     return [
       ...C.nav.map((item) => ({
         id: `nav-${item.id}`,
@@ -2377,11 +2363,11 @@ export default function Portfolio() {
       })),
       { id: "copy-email", group: "Actions", label: "Copy email address", icon: Copy, run: onCopyEmail },
       { id: "copy-resume", group: "Actions", label: "Copy resume as text", icon: FileText, run: onCopyResume },
-      { id: "print-resume", group: "Actions", label: "Print resume", icon: Printer, run: onPrint },
       github && { id: "github", group: "Links", label: "GitHub", hint: github.replace("https://", ""), icon: Github, href: github },
+      resumePdf && { id: "resume-pdf", group: "Links", label: "Download resume (PDF)", icon: Download, href: resumePdf },
       linkedin && { id: "linkedin", group: "Links", label: "LinkedIn", hint: linkedin.replace("https://", ""), icon: Linkedin, href: linkedin },
     ].filter(Boolean);
-  }, [onNav, onCopyEmail, onCopyResume, onPrint]);
+  }, [onNav, onCopyEmail, onCopyResume]);
 
   return (
     <div className="page">
@@ -2393,7 +2379,7 @@ export default function Portfolio() {
           <About />
           <Current />
           <Projects />
-          <Experience view={view} setView={setView} onPrint={onPrint} onCopyResume={onCopyResume} />
+          <Experience view={view} setView={setView} onCopyResume={onCopyResume} />
         </main>
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.08] py-8 font-mono text-xs text-zinc-500 print:hidden">
           <p>

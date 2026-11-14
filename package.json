@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "artifact": "node build.mjs"
+    "artifact": "node build.mjs",
+    "resume-pdf": "node scripts/make-resume-pdf.mjs"
   },
   "keywords": [],
   "author": "",
