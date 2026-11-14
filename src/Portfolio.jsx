@@ -43,6 +43,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Archive,
   ArrowRight,
+  ArrowUpDown,
   ArrowUpRight,
   Blocks,
   BookOpen,
@@ -431,9 +432,11 @@ export const PORTFOLIO_CONFIG = {
     { id: "embedded", label: "Embedded & Hardware", tone: "emerald" },
   ],
 
+  // `start` (YYYY-MM) is only used to sort; `period` is what is shown.
   timeline: [
     {
       id: "collins",
+      start: "2027-01",
       kind: "work",
       org: "Collins Aerospace",
       role: "Software Engineering Co-Op",
@@ -444,6 +447,7 @@ export const PORTFOLIO_CONFIG = {
     },
     {
       id: "gcri",
+      start: "2026-02",
       kind: "work",
       org: "Texas A&M Global Cyber Research Institute (GCRI)",
       role: resumeJob("gcri").role,
@@ -453,16 +457,18 @@ export const PORTFOLIO_CONFIG = {
     },
     {
       id: "tamu",
+      start: "2024-08",
       kind: "edu",
       org: "Texas A&M University",
       role: "B.S. in Computer Engineering",
-      period: "Expected May 2028",
+      period: "Aug 2024 – Expected May 2028",
       summary:
-        "Minors in Mathematics and Cybersecurity. Craig & Galen Brown Engineering Honors Program, GPA 4.00 / 4.00, Dean's Honor Roll.",
+        "Started attending in August 2024. Minors in Mathematics and Cybersecurity. Craig & Galen Brown Engineering Honors Program, GPA 4.00 / 4.00, Dean's Honor Roll.",
       bullets: [],
     },
     {
       id: "bjj",
+      start: "2025-01",
       kind: "lead",
       org: resumeJob("bjj").org,
       role: resumeJob("bjj").role,
@@ -472,6 +478,7 @@ export const PORTFOLIO_CONFIG = {
     },
     {
       id: "nitro",
+      start: "2024-02",
       kind: "work",
       org: "Nitro Swimming · Austin, TX",
       role: resumeJob("nitro").role,
@@ -2136,17 +2143,23 @@ function buildResumeText() {
 
 const TIMELINE_ICONS = { work: Briefcase, edu: GraduationCap, lead: Swords };
 
-function Timeline() {
+const TIMELINE_OLDEST_FIRST = [...C.timeline].sort((a, b) => a.start.localeCompare(b.start));
+const TIMELINE_LATEST_FIRST = [...TIMELINE_OLDEST_FIRST].reverse();
+
+function Timeline({ latestFirst }) {
+  const items = latestFirst ? TIMELINE_LATEST_FIRST : TIMELINE_OLDEST_FIRST;
   return (
-    <ol className="timeline flex flex-col gap-4">
-      {C.timeline.map((item, i) => {
+    <ol className={cx("timeline flex flex-col gap-4", !latestFirst && "is-oldest-first")}>
+      {items.map((item, i) => {
         const Icon = TIMELINE_ICONS[item.kind] ?? Briefcase;
         return (
-          <li key={item.id} className="relative pl-12 sm:pl-14">
+          <li key={item.id} className="group relative pl-12 sm:pl-14">
             <span
               className={cx(
-                "absolute left-0 top-5 z-10 flex h-9 w-9 items-center justify-center rounded-full border bg-[#09090b]",
-                item.badge ? "border-emerald-500/40 text-emerald-400" : "border-white/10 text-zinc-400"
+                "absolute left-0 top-5 z-10 flex h-9 w-9 items-center justify-center rounded-full border bg-[#09090b] transition duration-200",
+                item.badge
+                  ? "border-emerald-500/40 text-emerald-400 group-hover:border-emerald-400 group-hover:text-emerald-300 group-hover:shadow-[0_0_18px_rgba(16,185,129,0.45)]"
+                  : "border-white/10 text-zinc-400 group-hover:border-sky-400/70 group-hover:text-sky-300 group-hover:shadow-[0_0_18px_rgba(56,189,248,0.4)]"
               )}
               aria-hidden="true"
             >
@@ -2310,26 +2323,39 @@ function Experience({ view, setView, onDownload, onCopyResume }) {
     { id: "timeline", label: "Timeline", Icon: List },
     { id: "sheet", label: "Resume", Icon: FileText },
   ];
+  const [latestFirst, setLatestFirst] = useState(true);
   return (
     <section id="experience" className="section">
       <div className="print:hidden">
         <SectionHead path="experience" title="Experience &" accent="education" />
       </div>
       <div id="resume" className="flex flex-col gap-6">
-        <div className="segmented print:hidden" role="group" aria-label="Choose a view">
-          {views.map(({ id, label, Icon }) => (
+        <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+          <div className="segmented" role="group" aria-label="Choose a view">
+            {views.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={view === id}
+                onClick={() => setView(id)}
+                className={cx("segmented-btn", view === id && "is-active")}
+              >
+                <Icon size={14} aria-hidden="true" /> {label}
+              </button>
+            ))}
+          </div>
+          {view === "timeline" ? (
             <button
-              key={id}
               type="button"
-              aria-pressed={view === id}
-              onClick={() => setView(id)}
-              className={cx("segmented-btn", view === id && "is-active")}
+              onClick={() => setLatestFirst((value) => !value)}
+              className="btn-quiet"
+              aria-label={`Reverse timeline order. Currently ${latestFirst ? "latest" : "oldest"} first.`}
             >
-              <Icon size={14} aria-hidden="true" /> {label}
+              <ArrowUpDown size={13} aria-hidden="true" /> {latestFirst ? "Latest first" : "Oldest first"}
             </button>
-          ))}
+          ) : null}
         </div>
-        {view === "timeline" ? <Timeline /> : <ResumeSheet onDownload={onDownload} onCopy={onCopyResume} />}
+        {view === "timeline" ? <Timeline latestFirst={latestFirst} /> : <ResumeSheet onDownload={onDownload} onCopy={onCopyResume} />}
       </div>
     </section>
   );
@@ -2601,11 +2627,226 @@ function DownloadConfirm({ open, onClose, onConfirm }) {
   );
 }
 
+/* Real constellations for the backdrop. Each star is
+ * [right ascension (hours), declination (degrees), apparent magnitude], J2000
+ * and rounded; `lines` joins star indexes with the usual stick figure.
+ * `at` is where the figure sits on a wide screen and `narrowAt` on a phone
+ * (fractions of the viewport); figures without `narrowAt` are left out there.
+ * `tilt` (degrees) turns the figure, as the real ones turn through the night.
+ * `scale` keeps the figures roughly in proportion to their size in the sky. */
+const CONSTELLATIONS = [
+  {
+    id: "big-dipper",
+    name: "Big Dipper · Ursa Major",
+    at: [0.2, 0.13],
+    tilt: -14,
+    narrowAt: [0.22, 0.16],
+    scale: 1.1,
+    // Dubhe, Merak, Phecda, Megrez, Alioth, Mizar, Alkaid
+    stars: [
+      [11.062, 61.75, 1.8],
+      [11.031, 56.38, 2.4],
+      [11.897, 53.69, 2.4],
+      [12.257, 57.03, 3.3],
+      [12.9, 55.96, 1.8],
+      [13.399, 54.93, 2.2],
+      [13.792, 49.31, 1.9],
+    ],
+    lines: [[0, 1], [1, 2], [2, 3], [3, 0], [3, 4], [4, 5], [5, 6]],
+  },
+  {
+    id: "orion",
+    name: "Orion",
+    at: [0.06, 0.37],
+    tilt: 9,
+    narrowAt: [0.2, 0.82],
+    scale: 1,
+    // Betelgeuse, Rigel, Bellatrix, Saiph, Alnitak, Alnilam, Mintaka, Meissa
+    stars: [
+      [5.919, 7.41, 0.5],
+      [5.242, -8.2, 0.1],
+      [5.419, 6.35, 1.6],
+      [5.796, -9.67, 2.1],
+      [5.679, -1.94, 1.8],
+      [5.604, -1.2, 1.7],
+      [5.533, -0.3, 2.2],
+      [5.585, 9.93, 3.4],
+    ],
+    lines: [[0, 2], [0, 4], [2, 6], [4, 5], [5, 6], [4, 3], [6, 1], [3, 1], [7, 0], [7, 2]],
+  },
+  {
+    id: "lyra",
+    name: "Lyra",
+    at: [0.25, 0.6],
+    tilt: -22,
+    scale: 0.6,
+    // Vega, Epsilon, Zeta, Delta, Sheliak, Sulafat
+    stars: [
+      [18.616, 38.78, 0.0],
+      [18.739, 39.67, 4.6],
+      [18.746, 37.6, 4.3],
+      [18.908, 36.9, 4.3],
+      [18.835, 33.36, 3.5],
+      [18.982, 32.69, 3.2],
+    ],
+    lines: [[0, 1], [0, 2], [1, 2], [2, 3], [3, 5], [5, 4], [4, 2]],
+  },
+  {
+    id: "scorpius",
+    name: "Scorpius",
+    at: [0.1, 0.84],
+    tilt: 12,
+    scale: 1.15,
+    // Antares, Graffias, Dschubba, Pi, Sigma, Tau, Epsilon, Mu, Zeta, Eta,
+    // Sargas, Iota, Kappa, Shaula
+    stars: [
+      [16.49, -26.43, 1.0],
+      [16.091, -19.81, 2.6],
+      [16.006, -22.62, 2.3],
+      [15.981, -26.11, 2.9],
+      [16.353, -25.59, 2.9],
+      [16.598, -28.22, 2.8],
+      [16.836, -34.29, 2.3],
+      [16.864, -38.05, 3.0],
+      [16.91, -42.36, 3.6],
+      [17.203, -43.24, 3.3],
+      [17.622, -43.0, 1.9],
+      [17.793, -40.13, 3.0],
+      [17.708, -39.03, 2.4],
+      [17.56, -37.1, 1.6],
+    ],
+    lines: [[1, 2], [2, 3], [2, 4], [4, 0], [0, 5], [5, 6], [6, 7], [7, 8], [8, 9], [9, 10], [10, 11], [11, 12], [12, 13]],
+  },
+  {
+    id: "cassiopeia",
+    name: "Cassiopeia",
+    at: [0.84, 0.1],
+    tilt: 18,
+    narrowAt: [0.8, 0.14],
+    scale: 0.75,
+    // Caph, Schedar, Gamma, Ruchbah, Segin
+    stars: [
+      [0.153, 59.15, 2.3],
+      [0.675, 56.54, 2.2],
+      [0.945, 60.72, 2.4],
+      [1.43, 60.24, 2.7],
+      [1.907, 63.67, 3.4],
+    ],
+    lines: [[0, 1], [1, 2], [2, 3], [3, 4]],
+  },
+  {
+    id: "leo",
+    name: "Leo",
+    at: [0.93, 0.29],
+    tilt: -10,
+    scale: 1.05,
+    // Regulus, Eta, Algieba, Adhafera, Rasalas, Epsilon, Denebola, Zosma, Chertan
+    stars: [
+      [10.14, 11.97, 1.4],
+      [10.122, 16.76, 3.5],
+      [10.333, 19.84, 2.0],
+      [10.278, 23.42, 3.4],
+      [9.879, 26.01, 3.9],
+      [9.764, 23.77, 3.0],
+      [11.818, 14.57, 2.1],
+      [11.235, 20.52, 2.6],
+      [11.237, 15.43, 3.3],
+    ],
+    lines: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [2, 7], [7, 6], [6, 8], [8, 0], [7, 8]],
+  },
+  {
+    id: "cygnus",
+    name: "Cygnus",
+    at: [0.79, 0.58],
+    tilt: 24,
+    narrowAt: [0.8, 0.84],
+    scale: 0.95,
+    // Deneb, Sadr, Albireo, Gienah, Delta, Eta
+    stars: [
+      [20.69, 45.28, 1.3],
+      [20.37, 40.26, 2.2],
+      [19.512, 27.96, 3.1],
+      [20.77, 33.97, 2.5],
+      [19.75, 45.13, 2.9],
+      [19.938, 35.08, 3.9],
+    ],
+    lines: [[0, 1], [1, 5], [5, 2], [1, 3], [1, 4]],
+  },
+  {
+    id: "little-dipper",
+    name: "Little Dipper · Ursa Minor",
+    at: [0.95, 0.8],
+    tilt: -28,
+    scale: 0.8,
+    // Polaris, Yildun, Epsilon, Zeta, Kochab, Pherkad, Eta
+    stars: [
+      [2.53, 89.26, 2.0],
+      [17.537, 86.59, 4.4],
+      [16.766, 82.04, 4.2],
+      [15.734, 77.79, 4.3],
+      [14.845, 74.16, 2.1],
+      [15.345, 71.83, 3.0],
+      [16.292, 75.76, 5.0],
+    ],
+    lines: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 3]],
+  },
+];
+
+/** Flattens one constellation onto a plane (gnomonic projection about its own
+ *  centre) the way it looks from the ground: north up, east to the left.
+ *  Coordinates come back centred on 0 with the longer side spanning 1. */
+function projectConstellation(con) {
+  const rad = Math.PI / 180;
+  const sph = con.stars.map(([ra, dec]) => ({ ra: ra * 15 * rad, dec: dec * rad }));
+  let vx = 0;
+  let vy = 0;
+  let vz = 0;
+  for (const s of sph) {
+    vx += Math.cos(s.dec) * Math.cos(s.ra);
+    vy += Math.cos(s.dec) * Math.sin(s.ra);
+    vz += Math.sin(s.dec);
+  }
+  const ra0 = Math.atan2(vy, vx);
+  const dec0 = Math.atan2(vz, Math.hypot(vx, vy));
+  const flat = sph.map((s) => {
+    const cosc = Math.sin(dec0) * Math.sin(s.dec) + Math.cos(dec0) * Math.cos(s.dec) * Math.cos(s.ra - ra0);
+    return {
+      x: -(Math.cos(s.dec) * Math.sin(s.ra - ra0)) / cosc,
+      y: -(Math.cos(dec0) * Math.sin(s.dec) - Math.sin(dec0) * Math.cos(s.dec) * Math.cos(s.ra - ra0)) / cosc,
+    };
+  });
+  const xs = flat.map((p) => p.x);
+  const ys = flat.map((p) => p.y);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  const w = Math.max(...xs) - minX;
+  const h = Math.max(...ys) - minY;
+  const span = Math.max(w, h);
+  const brightest = Math.min(...con.stars.map((star) => star[2]));
+  return {
+    ...con,
+    halfW: w / span / 2,
+    halfH: h / span / 2,
+    points: flat.map((p, i) => {
+      const mag = con.stars[i][2];
+      return {
+        x: (p.x - minX - w / 2) / span,
+        y: (p.y - minY - h / 2) / span,
+        r: Math.max(1.2, 2.9 - 0.42 * mag),
+        hot: mag === brightest,
+      };
+    }),
+  };
+}
+
+const SKY = CONSTELLATIONS.map(projectConstellation);
+
 /** Fixed backdrop: drifting colour glows, a dot grid that lights up under the
- *  cursor, and a slow network of nodes and links drawn on a canvas. */
+ *  cursor, and real constellations drawn on a canvas. */
 function Background() {
   const rootRef = useRef(null);
   const canvasRef = useRef(null);
+  const labelRef = useRef(null);
 
   useEffect(() => {
     const el = rootRef.current;
@@ -2636,42 +2877,139 @@ function Background() {
     const ctx = canvas?.getContext("2d");
     if (!ctx) return undefined;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    const LINK = 150;
     let width = 0;
     let height = 0;
-    let nodes = [];
+    let placed = [];
+    let now = 0;
     let raf = 0;
+    const pointer = { x: 0, y: 0, active: false };
+    const REACH = 110; // how close the cursor gets before a star feels it
 
-    const draw = () => {
-      ctx.clearRect(0, 0, width, height);
-      for (const node of nodes) {
-        if (!reduce) {
-          node.x += node.vx;
-          node.y += node.vy;
-          if (node.x < 0 || node.x > width) node.vx *= -1;
-          if (node.y < 0 || node.y > height) node.vy *= -1;
+    // The cursor pushes on any star it comes near, and the push moves that
+    // whole constellation, so the shape stays intact. A spring pulls each
+    // figure back home once the cursor leaves. Only figures that sit wholly
+    // in the side margins react (`free`): one that shares any width with the
+    // content column stays put, so on a phone or a narrow window none move.
+    const step = () => {
+      let pointerOnContent = null; // worked out at most once per frame
+      for (const sky of placed) {
+        let fx = 0;
+        let fy = 0;
+        if (pointer.active && sky.free) {
+          for (const star of sky.stars) {
+            const dx = star.x + sky.ox - pointer.x;
+            const dy = star.y + sky.oy - pointer.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < REACH && dist > 0.01) {
+              const push = (1 - dist / REACH) * 0.3;
+              fx += (dx / dist) * push;
+              fy += (dy / dist) * push;
+            }
+          }
         }
+        // No push while the cursor is on page content.
+        if (fx !== 0 || fy !== 0) {
+          if (pointerOnContent === null) pointerOnContent = hasContentAt(pointer.x, pointer.y);
+          if (pointerOnContent) {
+            fx = 0;
+            fy = 0;
+          }
+        }
+        sky.vx = (sky.vx + fx - sky.ox * 0.012) * 0.9;
+        sky.vy = (sky.vy + fy - sky.oy * 0.012) * 0.9;
+        sky.ox += sky.vx;
+        sky.oy += sky.vy;
       }
-      ctx.lineWidth = 1;
-      for (let i = 0; i < nodes.length; i += 1) {
-        for (let j = i + 1; j < nodes.length; j += 1) {
-          const dx = nodes[i].x - nodes[j].x;
-          const dy = nodes[i].y - nodes[j].y;
-          const dist = Math.hypot(dx, dy);
-          if (dist < LINK) {
-            ctx.strokeStyle = `rgba(129, 160, 255, ${((1 - dist / LINK) * 0.28).toFixed(3)})`;
-            ctx.beginPath();
-            ctx.moveTo(nodes[i].x, nodes[i].y);
-            ctx.lineTo(nodes[j].x, nodes[j].y);
-            ctx.stroke();
+    };
+    // Names the constellation under the cursor. The label is a DOM node, not
+    // canvas text, so the canvas's centre fade does not dim it.
+    const label = labelRef.current;
+    let labelled = null;
+    // True when page content (text, a card, a control) is drawn at this point.
+    // The backdrop ignores pointer events, so it is never the element found.
+    const hasContentAt = (x, y) => {
+      const found = document.elementFromPoint(x, y);
+      if (!found) return false;
+      if (found.closest(".card, .sheet, .hobby, .palette, header, a, button, input, svg, img, canvas")) return true;
+      for (const node of found.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) return true;
+      }
+      return false;
+    };
+    const updateLabel = () => {
+      if (!label) return;
+      const PAD = 16;
+      let hit = null;
+      let best = Infinity;
+      if (pointer.active) {
+        for (const sky of placed) {
+          if (!sky.free) continue;
+          const left = sky.minX + sky.ox - PAD;
+          const right = sky.maxX + sky.ox + PAD;
+          const top = sky.minY + sky.oy - PAD;
+          const bottom = sky.maxY + sky.oy + PAD;
+          if (pointer.x < left || pointer.x > right || pointer.y < top || pointer.y > bottom) continue;
+          const dist = Math.hypot(pointer.x - (left + right) / 2, pointer.y - (top + bottom) / 2);
+          if (dist < best) {
+            best = dist;
+            hit = sky;
           }
         }
       }
-      for (const node of nodes) {
-        ctx.fillStyle = node.hot ? "rgba(52, 211, 153, 0.9)" : "rgba(226, 232, 255, 0.5)";
+      // Hovering content that happens to sit over a figure is not hovering the figure.
+      if (hit && hasContentAt(pointer.x, pointer.y)) hit = null;
+      if (!hit) {
+        if (labelled) label.classList.remove("is-on");
+        labelled = null;
+        return;
+      }
+      if (hit !== labelled) {
+        label.textContent = hit.name;
+        labelled = hit;
+      }
+      // Under the figure, or above it when there is no room below.
+      const below = hit.maxY + hit.oy + 14;
+      const y = below + 24 > height ? hit.minY + hit.oy - 34 : below;
+      const x = Math.min(Math.max((hit.minX + hit.maxX) / 2 + hit.ox, 70), Math.max(70, width - 70));
+      label.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translateX(-50%)`;
+      // Stay hidden while any content overlaps where the label would be.
+      const half = label.offsetWidth / 2;
+      const midY = y + label.offsetHeight / 2;
+      const covered = [x - half, x, x + half].some((px) => hasContentAt(px, midY));
+      label.classList.toggle("is-on", !covered);
+    };
+    const onPointerMove = (event) => {
+      pointer.x = event.clientX;
+      pointer.y = event.clientY;
+      pointer.active = true;
+      if (reduce) updateLabel();
+    };
+    const onPointerGone = () => {
+      pointer.active = false;
+      updateLabel();
+    };
+
+    const draw = () => {
+      ctx.clearRect(0, 0, width, height);
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = "rgba(129, 160, 255, 0.45)";
+      for (const sky of placed) {
+        const { ox, oy } = sky;
         ctx.beginPath();
-        ctx.arc(node.x, node.y, node.hot ? 2 : 1.3, 0, Math.PI * 2);
-        ctx.fill();
+        for (const [from, to] of sky.lines) {
+          ctx.moveTo(sky.stars[from].x + ox, sky.stars[from].y + oy);
+          ctx.lineTo(sky.stars[to].x + ox, sky.stars[to].y + oy);
+        }
+        ctx.stroke();
+        for (const star of sky.stars) {
+          const twinkle = reduce ? 1 : 0.78 + 0.22 * Math.sin(now / star.speed + star.phase);
+          ctx.fillStyle = star.hot
+            ? `rgba(52, 211, 153, ${twinkle.toFixed(3)})`
+            : `rgba(226, 232, 255, ${(0.85 * twinkle).toFixed(3)})`;
+          ctx.beginPath();
+          ctx.arc(star.x + ox, star.y + oy, star.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     };
 
@@ -2682,18 +3020,64 @@ function Background() {
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.round(Math.min(72, Math.max(22, (width * height) / 24000)));
-      nodes = Array.from({ length: count }, (_, i) => ({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 0.3,
-        vy: (Math.random() - 0.5) * 0.3,
-        hot: i % 9 === 0,
-      }));
+      const narrow = width < 700;
+      const base = narrow
+        ? Math.min(width * 0.3, height * 0.2)
+        : Math.max(90, Math.min(230, height * 0.2, width * 0.15));
+      const clamp = (value, half, max) => Math.min(Math.max(value, half), Math.max(half, max - half));
+      placed = SKY.filter((sky) => !narrow || sky.narrowAt).map((sky, i) => {
+        const [fx, fy] = narrow ? sky.narrowAt : sky.at;
+        const size = base * sky.scale;
+        const cx = clamp(fx * width, size * 0.35, width);
+        const cy = clamp(fy * height, size * 0.35, height);
+        const angle = ((sky.tilt ?? 0) * Math.PI) / 180;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        return {
+          name: sky.name,
+          lines: sky.lines,
+          ox: 0,
+          oy: 0,
+          vx: 0,
+          vy: 0,
+          stars: sky.points.map((point, j) => ({
+            x: cx + (point.x * cos - point.y * sin) * size,
+            y: cy + (point.x * sin + point.y * cos) * size,
+            r: point.r,
+            hot: point.hot,
+            speed: 900 + ((i * 7 + j * 13) % 9) * 160,
+            phase: i * 2.3 + j * 1.1,
+          })),
+        };
+      });
+      for (const sky of placed) {
+        sky.minX = Math.min(...sky.stars.map((star) => star.x));
+        sky.maxX = Math.max(...sky.stars.map((star) => star.x));
+        sky.minY = Math.min(...sky.stars.map((star) => star.y));
+        sky.maxY = Math.max(...sky.stars.map((star) => star.y));
+      }
+      // The content column: the shell minus its side padding.
+      const shell = document.querySelector(".shell");
+      let contentLeft = 0;
+      let contentRight = width;
+      if (shell) {
+        const rect = shell.getBoundingClientRect();
+        const pad = getComputedStyle(shell);
+        contentLeft = rect.left + (parseFloat(pad.paddingLeft) || 0);
+        contentRight = rect.right - (parseFloat(pad.paddingRight) || 0);
+      }
+      for (const sky of placed) {
+        sky.free = sky.maxX < contentLeft - 12 || sky.minX > contentRight + 12;
+      }
+      labelled = null;
+      updateLabel();
       draw();
     };
 
-    const loop = () => {
+    const loop = (time) => {
+      now = time;
+      step();
+      updateLabel();
       draw();
       raf = requestAnimationFrame(loop);
     };
@@ -2706,10 +3090,16 @@ function Background() {
     start();
     window.addEventListener("resize", resize);
     document.addEventListener("visibilitychange", start);
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    document.documentElement.addEventListener("pointerleave", onPointerGone);
+    window.addEventListener("blur", onPointerGone);
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
       document.removeEventListener("visibilitychange", start);
+      window.removeEventListener("pointermove", onPointerMove);
+      document.documentElement.removeEventListener("pointerleave", onPointerGone);
+      window.removeEventListener("blur", onPointerGone);
     };
   }, []);
 
@@ -2720,10 +3110,12 @@ function Background() {
         <i />
         <i />
       </div>
-      <canvas ref={canvasRef} className="bg-net" />
       <div className="bg-dots" />
       <div className="bg-dots bg-dots-hot" />
       <div className="bg-fade" />
+      {/* Drawn last so the bottom fade does not dim the network. */}
+      <canvas ref={canvasRef} className="bg-net" />
+      <div ref={labelRef} className="bg-sky-label" />
     </div>
   );
 }
@@ -2777,6 +3169,7 @@ export default function Portfolio() {
   const onNav = useCallback(
     (id) => {
       if (id === "resume") setView("sheet");
+      if (id === "experience") setView("timeline");
       scrollToId(id);
     },
     [scrollToId]
