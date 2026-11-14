@@ -2901,7 +2901,7 @@ function Background() {
             const dy = star.y + sky.oy - pointer.y;
             const dist = Math.hypot(dx, dy);
             if (dist < REACH && dist > 0.01) {
-              const push = (1 - dist / REACH) * 0.3;
+              const push = (1 - dist / REACH) * 0.15;
               fx += (dx / dist) * push;
               fy += (dy / dist) * push;
             }
