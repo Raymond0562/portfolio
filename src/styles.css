@@ -163,6 +163,7 @@ h2, h3 { text-wrap: balance; }
 
 /* ---- reveal ---- */
 .reveal {
+  min-width: 0;
   opacity: 0.12;
   transform: translateY(18px);
   transition: opacity 0.7s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -464,6 +465,8 @@ h2, h3 { text-wrap: balance; }
 .confirm-overlay { align-items: center; padding-top: 16px; }
 .confirm { max-width: 440px; }
 
+.mitm-dot { filter: drop-shadow(0 0 4px rgba(251, 113, 133, 0.9)); }
+
 /* ---- toast ---- */
 .toast-region {
   position: fixed;
@@ -656,6 +659,7 @@ h2, h3 { text-wrap: balance; }
 /* ---- project visuals ---- */
 .viz {
   display: flex;
+  min-width: 0;
   align-items: center;
   min-height: 11.5rem;
   padding: 1.25rem 1.5rem;
@@ -728,6 +732,39 @@ h2, h3 { text-wrap: balance; }
     border-radius: 0 17px 17px 0;
   }
 }
+.viz-chip { transition: border-color 0.3s, background-color 0.3s, box-shadow 0.3s, opacity 0.3s, color 0.3s; }
+.viz-chip.is-active { border-color: currentColor; background: rgba(255, 255, 255, 0.09); box-shadow: 0 0 0 1px currentColor, 0 0 14px -2px currentColor; }
+.viz-chip.is-dim, .bar-v.is-dim { opacity: 0.38; }
+.viz-status {
+  min-height: 1.1rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.vlan-grid span { transition: background-color 0.4s, box-shadow 0.4s; }
+.vlan-grid span.is-fresh { animation: fresh 0.9s ease-out; }
+@keyframes fresh { from { transform: scale(2.6); box-shadow: 0 0 16px rgba(16, 185, 129, 1); } }
+.flow-line { transition: opacity 0.35s; }
+.flow-line.is-pending { opacity: 0.28; }
+.flow-line.is-active .flow-arrow { color: var(--cyan); animation: nudge 0.7s ease-in-out infinite; }
+@keyframes nudge { 50% { transform: translateX(3px); } }
+.op { transition: background-color 0.3s, border-color 0.3s, color 0.3s; }
+.op.is-active { border-color: var(--cyan); background: rgba(56, 189, 248, 0.2); color: var(--fg); }
+.led { display: inline-block; width: 8px; height: 8px; border-radius: 50%; transition: background-color 0.2s, box-shadow 0.2s; }
+.led.is-green { background: var(--live); box-shadow: 0 0 8px var(--live); }
+.led.is-red { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.8); }
+.file-chip { animation: toast-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.pcard-md { width: 2.1rem; height: 3rem; font-size: 1.05rem; }
+.pcard-sm { width: 1.05rem; height: 1.5rem; border-radius: 4px; }
+.pcard-back {
+  width: 2.1rem;
+  height: 3rem;
+  background: repeating-linear-gradient(45deg, #4f46e5 0 4px, #3730a3 4px 8px);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.75), 0 6px 16px -6px #000;
+}
+.pcard-back.pcard-sm { width: 1.05rem; height: 1.5rem; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.75); }
+.pcard.is-top { width: 2.1rem; height: 3rem; font-size: 1.05rem; animation: deal 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes deal { from { opacity: 0; transform: translateY(-14px) rotate(-8deg); } }
 .viz-chip-ok { border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.08); color: #6ee7b7; }
 .viz-chip-warn { border-color: rgba(251, 113, 133, 0.45); background: rgba(251, 113, 133, 0.07); color: #fda4af; }
 .vlan-grid { display: grid; grid-template-columns: repeat(25, minmax(0, 1fr)); gap: 3px; }
@@ -737,10 +774,15 @@ h2, h3 { text-wrap: balance; }
 @keyframes lit { 50% { opacity: 0.45; } }
 .pipeline li + li { position: relative; }
 
+/* Reduced motion: drop the large movement (scroll reveals, drifting backdrop,
+   lifts and pops). Small in-place indicators such as the packet dot and the
+   status blink keep running. */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  *, *::before, *::after { animation: none !important; transition: none !important; }
-  .reveal { opacity: 1; transform: none; }
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .bg-aurora i, .radar i, .palette, .palette-overlay, .toast, .term-panel, .term-body > * { animation: none !important; }
+  .card, .btn, .hobby, .pill, .interest, .pcard { transition: none; }
+  .card:hover, .btn:hover, .hobby:hover, .pill:hover, .interest:hover { transform: none; }
 }
 
 /* Print: only the resume sheet, sized to fit one US Letter page. */

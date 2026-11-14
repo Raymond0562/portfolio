@@ -560,8 +560,7 @@ export const PROJECTS_DATA = [
   },
   {
     id: "homework3",
-    name: "homework3 — Wikipedia Word Search",
-    code: true,
+    name: "Wikipedia Word Search",
     category: "systems",
     visual: "throughput",
     description:
@@ -954,7 +953,7 @@ function TerminalCard() {
 
 function Hero({ onNav, onCopyEmail }) {
   return (
-    <section id="top" className="grid items-center gap-10 pb-20 pt-14 lg:grid-cols-[1.1fr_0.9fr] lg:gap-14 lg:pt-20 print:hidden">
+    <section id="top" className="grid grid-cols-1 items-center gap-10 pb-20 pt-14 lg:grid-cols-[1.1fr_0.9fr] lg:gap-14 lg:pt-20 print:hidden">
       <div className="flex min-w-0 flex-col items-start gap-6">
         <Reveal>
           <p className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] px-3.5 py-1.5 font-mono text-[11.5px] leading-relaxed text-emerald-300">
@@ -1107,7 +1106,7 @@ function About() {
   return (
     <section id="about" className="section print:hidden">
       <SectionHead path="about" title="Defense, offense, and" accent="the hardware underneath" />
-      <div className="grid gap-4 md:grid-cols-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
         <Reveal className="md:col-span-4">
           <Card className="flex h-full flex-col gap-4 p-6 sm:p-8">
             <p className="label">Biography</p>
@@ -1274,7 +1273,7 @@ function About() {
           <Card className="flex h-full flex-col gap-6 p-6 sm:p-8">
             <p className="label">Technical stack</p>
             {C.stack.map((group) => (
-              <div key={group.id} className="grid gap-2.5 sm:grid-cols-[11rem_1fr] sm:gap-4">
+              <div key={group.id} className="grid grid-cols-1 gap-2.5 sm:grid-cols-[11rem_1fr] sm:gap-4">
                 <p className="flex items-center gap-2 pt-1 text-sm text-zinc-300">
                   <span className={cx("h-1.5 w-1.5 rounded-full", TONE_DOT[group.tone])} aria-hidden="true" />
                   {group.label}
@@ -1299,7 +1298,7 @@ function About() {
                 What I do when the laptop is <span className="italic">closed</span>
               </p>
             </div>
-            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {C.interests.map((item) => {
                 const Icon = INTEREST_ICONS[item.icon] ?? Hash;
                 return (
@@ -1335,7 +1334,7 @@ function Current() {
       <SectionHead path="now" title="What I'm building" accent="right now" />
       <Reveal>
         <Card className="current-card overflow-hidden">
-          <div className="grid lg:grid-cols-[1.25fr_1fr]">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_1fr]">
             <div className="flex min-w-0 flex-col gap-6 p-6 sm:p-9">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 font-mono text-[11px] text-emerald-300">
@@ -1421,47 +1420,87 @@ function VizCaption({ children }) {
   return <p className="font-mono text-[10.5px] text-zinc-500">{children}</p>;
 }
 
+/** Steps 0..count-1 on a timer. Pauses while the visual is off screen or the tab is hidden. */
+function useStep(count, ms, ref) {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    let visible = true;
+    const el = ref.current;
+    const io =
+      el && "IntersectionObserver" in window
+        ? new IntersectionObserver((entries) => {
+            visible = entries[0].isIntersecting;
+          })
+        : null;
+    io?.observe(el);
+    const timer = setInterval(() => {
+      if (visible && !document.hidden) setStep((current) => (current + 1) % count);
+    }, ms);
+    return () => {
+      clearInterval(timer);
+      io?.disconnect();
+    };
+  }, [count, ms, ref]);
+  return step;
+}
+
 function OddsVisual() {
-  const max = 20;
+  const ref = useRef(null);
+  const RAMP = 14;
+  const step = useStep(RAMP + 9, 450, ref);
+  const progress = Math.min(1, step / RAMP);
+  const runs = Math.max(100, Math.round((10000 * progress * progress) / 100) * 100);
+  const max = 22;
   return (
-    <div className="flex w-full flex-col gap-2.5">
-      <VizCaption>simulated 2026 champion odds, top 6 teams</VizCaption>
+    <div ref={ref} className="flex w-full flex-col gap-2.5">
+      <VizCaption>
+        simulated 2026 champion odds · run{" "}
+        <span className="text-zinc-200 tabular-nums">{runs.toLocaleString("en-US")}</span> / 10,000
+      </VizCaption>
       <ul className="flex flex-col gap-1.5">
-        {WORLD_CUP_ODDS.map((row) => (
-          <li key={row.team} className="grid grid-cols-[5.5rem_1fr_2.75rem] items-center gap-2 text-[11.5px]">
-            <span className="truncate text-zinc-300">{row.team}</span>
-            <span className="flex h-2 items-center">
-              <Fill pct={(row.p / max) * 100} title={`${row.team}: ${row.p}% to win`} className="bar-h" />
-            </span>
-            <span className="text-right font-mono text-zinc-300 tabular-nums">{row.p}%</span>
-          </li>
-        ))}
+        {WORLD_CUP_ODDS.map((row, i) => {
+          // Early runs are noisy; the estimate settles as the run count grows.
+          const wobble = Math.sin((i + 1) * (step + 1) * 1.7) * 4.5 * (1 - progress);
+          const p = Math.max(0.5, Math.min(max, row.p + wobble));
+          return (
+            <li key={row.team} className="grid grid-cols-[5.5rem_1fr_2.75rem] items-center gap-2 text-[11.5px]">
+              <span className="truncate text-zinc-300">{row.team}</span>
+              <span className="flex h-2 items-center">
+                <Fill pct={(p / max) * 100} title={`${row.team}: ${row.p}% to win`} className="bar-h" />
+              </span>
+              <span className="text-right font-mono text-zinc-300 tabular-nums">{p.toFixed(1)}%</span>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
 }
 
 function ThroughputVisual() {
+  const ref = useRef(null);
+  const step = useStep(SEARCH_THROUGHPUT.length, 1100, ref);
   const max = 2200;
-  const last = SEARCH_THROUGHPUT.length - 1;
   return (
-    <div className="flex w-full flex-col gap-2.5">
+    <div ref={ref} className="flex w-full flex-col gap-2.5">
       <VizCaption>search speed (MB/s) as the keyword list grows</VizCaption>
       <ol className="grid grid-cols-9 gap-1.5">
         {SEARCH_THROUGHPUT.map((point, i) => (
           <li key={point.x} className="flex flex-col items-center gap-1">
-            <span className="h-3.5 font-mono text-[10px] text-zinc-300 tabular-nums">
-              {i === 0 || i === last ? point.mbps.toLocaleString("en-US") : ""}
+            <span className="h-3.5 font-mono text-[10px] text-zinc-100 tabular-nums">
+              {i === step ? point.mbps.toLocaleString("en-US") : ""}
             </span>
             <span className="flex h-16 w-full items-end justify-center">
               <Fill
                 axis="height"
                 pct={(point.mbps / max) * 100}
                 title={`${point.x} keyword${point.x === 1 ? "" : "s"}: ${point.mbps.toLocaleString("en-US")} MB/s`}
-                className="bar-v"
+                className={cx("bar-v", i !== step && "is-dim")}
               />
             </span>
-            <span className="font-mono text-[10px] text-zinc-500 tabular-nums">{point.x}</span>
+            <span className={cx("font-mono text-[10px] tabular-nums", i === step ? "text-zinc-100" : "text-zinc-500")}>
+              {point.x}
+            </span>
           </li>
         ))}
       </ol>
@@ -1470,23 +1509,51 @@ function ThroughputVisual() {
   );
 }
 
+const VLAN_DEVICES = [
+  { name: "drone-07", ok: true, cell: 23, vlan: 124 },
+  { name: "unknown-3f", ok: false },
+  { name: "drone-12", ok: true, cell: 57, vlan: 158 },
+  { name: "drone-03", ok: true, cell: 88, vlan: 189 },
+];
+const VLAN_BASE = [3, 17, 41, 66, 79];
+
 function VlanVisual() {
+  const ref = useRef(null);
+  const PHASES = 4; // join, quarantine, attest, verdict
+  const step = useStep(VLAN_DEVICES.length * PHASES, 1050, ref);
+  const index = Math.floor(step / PHASES);
+  const phase = step % PHASES;
+  const device = VLAN_DEVICES[index];
+  const lit = new Set(VLAN_BASE);
+  VLAN_DEVICES.forEach((d, i) => {
+    if (d.ok && (i < index || (i === index && phase === 3))) lit.add(d.cell);
+  });
+  const fresh = device.ok && phase === 3 ? device.cell : -1;
+  const denied = phase === 3 && !device.ok;
+  const status = [
+    `${device.name} joins the network`,
+    "held in the quarantine VLAN",
+    "TPM attestation in progress…",
+    device.ok ? `verified → trusted VLAN ${device.vlan}` : "attestation failed → stays quarantined",
+  ][phase];
   const cells = Array.from({ length: 100 }, (_, i) => i);
-  const lit = new Set([3, 17, 28, 41, 42, 66, 79, 93]);
   return (
-    <div className="flex w-full flex-col gap-3">
+    <div ref={ref} className="flex w-full flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 font-mono text-[11px]">
-        <span className="viz-chip text-zinc-400">new device</span>
+        <span className={cx("viz-chip text-zinc-400", phase === 0 && "is-active")}>new device</span>
         <ArrowRight size={12} className="text-zinc-600" aria-hidden="true" />
-        <span className="viz-chip viz-chip-warn">quarantine</span>
+        <span className={cx("viz-chip viz-chip-warn", (phase === 1 || denied) && "is-active")}>quarantine</span>
         <ArrowRight size={12} className="text-zinc-600" aria-hidden="true" />
-        <span className="viz-chip text-sky-300">attest</span>
+        <span className={cx("viz-chip text-sky-300", phase === 2 && "is-active")}>attest</span>
         <ArrowRight size={12} className="text-zinc-600" aria-hidden="true" />
-        <span className="viz-chip viz-chip-ok">trusted VLAN</span>
+        <span className={cx("viz-chip viz-chip-ok", phase === 3 && device.ok && "is-active")}>trusted VLAN</span>
       </div>
+      <p className="viz-status">
+        <span className={denied ? "text-rose-300" : phase === 3 ? "text-emerald-300" : "text-zinc-200"}>▸ {status}</span>
+      </p>
       <div className="vlan-grid" aria-hidden="true">
         {cells.map((i) => (
-          <span key={i} className={lit.has(i) ? "is-lit" : undefined} />
+          <span key={i} className={cx(lit.has(i) && "is-lit", i === fresh && "is-fresh")} />
         ))}
       </div>
       <VizCaption>100-VLAN trusted pool, one isolated subnet per verified drone</VizCaption>
@@ -1495,173 +1562,353 @@ function VlanVisual() {
 }
 
 function MitmVisual() {
-  const [animate, setAnimate] = useState(false);
+  const rootRef = useRef(null);
+  const dotRef = useRef(null);
+  const attackerRef = useRef(null);
+  const statusRef = useRef(null);
+  // The packet travels ground station -> attacker -> drone on a loop. Most
+  // loops the attacker only relays it; every third loop it rewrites the packet.
   useEffect(() => {
-    setAnimate(!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+    const dot = dotRef.current;
+    const attacker = attackerRef.current;
+    const status = statusRef.current;
+    if (!dot || !attacker || !status) return undefined;
+    const points = [
+      [52, 34],
+      [170, 98],
+      [288, 34],
+    ];
+    const first = Math.hypot(points[1][0] - points[0][0], points[1][1] - points[0][1]);
+    const second = Math.hypot(points[2][0] - points[1][0], points[2][1] - points[1][1]);
+    const total = first + second;
+    const LOOP_MS = 3000;
+    const started = performance.now();
+    let raf = 0;
+    let lastKey = "";
+    const tick = (now) => {
+      const elapsed = now - started;
+      const tamper = Math.floor(elapsed / LOOP_MS) % 3 === 1;
+      const travelled = ((elapsed % LOOP_MS) / LOOP_MS) * total;
+      const onFirst = travelled <= first;
+      const from = onFirst ? points[0] : points[1];
+      const to = onFirst ? points[1] : points[2];
+      const t = onFirst ? travelled / first : (travelled - first) / second;
+      dot.setAttribute("cx", (from[0] + (to[0] - from[0]) * t).toFixed(1));
+      dot.setAttribute("cy", (from[1] + (to[1] - from[1]) * t).toFixed(1));
+      const key = `${tamper}-${onFirst}`;
+      if (key !== lastKey) {
+        lastKey = key;
+        const rewritten = tamper && !onFirst;
+        dot.setAttribute("fill", rewritten ? "#fb7185" : "#38bdf8");
+        dot.setAttribute("r", rewritten ? "5" : "4");
+        attacker.setAttribute("fill", rewritten ? "#fb7185" : "#121215");
+        status.textContent = onFirst
+          ? "ground station sends: ARM"
+          : rewritten
+            ? "attacker rewrites it in transit: DISARM"
+            : "attacker reads it and relays it unchanged";
+        status.className = rewritten ? "viz-status text-rose-300" : "viz-status text-zinc-300";
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, []);
-  const path = "M52,34 L170,98 L288,34";
   return (
-    <div className="flex w-full flex-col items-center gap-1">
-      <svg viewBox="0 0 340 128" className="w-full max-w-[380px]" role="img" aria-label="Three-node lab: the attacker sits on the path between ground station and drone">
+    <div ref={rootRef} className="flex w-full flex-col items-center gap-1">
+      <svg viewBox="0 0 340 128" className="w-full max-w-[380px]" role="img" aria-label="Three-node lab: the attacker sits on the path between ground station and drone and sometimes rewrites packets">
         <line x1="52" y1="34" x2="288" y2="34" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" strokeDasharray="4 5" />
-        <path d={path} fill="none" stroke="#fb7185" strokeWidth="1.5" strokeOpacity="0.75" />
-        {animate ? (
-          <circle r="3.5" fill="#fb7185">
-            <animateMotion dur="2.8s" repeatCount="indefinite" path={path} />
-          </circle>
-        ) : null}
+        <path d="M52,34 L170,98 L288,34" fill="none" stroke="#fb7185" strokeWidth="1.5" strokeOpacity="0.6" />
         <g fontFamily="JetBrains Mono, monospace" fontSize="10" textAnchor="middle">
           <circle cx="52" cy="34" r="9" fill="#121215" stroke="#38bdf8" strokeWidth="1.5" />
           <text x="52" y="60" fill="#d4d4d8">ground station</text>
           <circle cx="288" cy="34" r="9" fill="#121215" stroke="#38bdf8" strokeWidth="1.5" />
           <text x="288" y="60" fill="#d4d4d8">drone</text>
-          <circle cx="170" cy="98" r="9" fill="#121215" stroke="#fb7185" strokeWidth="1.5" />
+          <circle ref={attackerRef} cx="170" cy="98" r="9" fill="#121215" stroke="#fb7185" strokeWidth="1.5" />
           <text x="170" y="122" fill="#fda4af">attacker</text>
           <text x="170" y="24" fill="#71717a">MAVLink, intended path</text>
         </g>
+        <circle ref={dotRef} className="mitm-dot" cx="52" cy="34" r="4" fill="#38bdf8" />
       </svg>
+      <p ref={statusRef} className="viz-status text-zinc-300">
+        ground station sends: ARM
+      </p>
     </div>
   );
 }
 
 function AttestVisual() {
+  const ref = useRef(null);
+  const PHASES = 5; // three messages, verdict, hold
+  const step = useStep(PHASES * 2, 1100, ref);
+  const tampered = Math.floor(step / PHASES) === 1;
+  const phase = step % PHASES;
   const steps = [
     { from: "drone", to: "verifier", msg: "request challenge" },
-    { from: "verifier", to: "drone", msg: "nonce" },
-    { from: "drone", to: "verifier", msg: "PCR-backed evidence" },
+    { from: "verifier", to: "drone", msg: "fresh nonce" },
+    { from: "drone", to: "verifier", msg: tampered ? "PCR evidence (PCRs changed)" : "PCR-backed evidence" },
   ];
+  const decided = phase >= 3;
   return (
-    <div className="flex w-full flex-col gap-1.5 font-mono text-[11.5px]">
-      {steps.map((step) => (
-        <p key={step.msg} className="flex flex-wrap items-center gap-x-2">
-          <span className="w-[4.2rem] text-sky-400">{step.from}</span>
-          <ArrowRight size={12} className="text-zinc-600" aria-hidden="true" />
-          <span className="w-[4.2rem] text-sky-400">{step.to}</span>
-          <span className="text-zinc-300">{step.msg}</span>
+    <div ref={ref} className="flex w-full flex-col gap-1.5 font-mono text-[11.5px]">
+      {steps.map((line, i) => (
+        <p
+          key={i}
+          className={cx("flow-line flex flex-wrap items-center gap-x-2", phase === i && "is-active", phase < i && "is-pending")}
+        >
+          <span className="w-[4.2rem] text-sky-400">{line.from}</span>
+          <ArrowRight size={12} className="flow-arrow text-zinc-600" aria-hidden="true" />
+          <span className="w-[4.2rem] text-sky-400">{line.to}</span>
+          <span className={tampered && i === 2 ? "text-rose-300" : "text-zinc-300"}>{line.msg}</span>
         </p>
       ))}
       <p className="mt-1.5 flex flex-wrap items-center gap-2 border-t border-white/[0.08] pt-2.5">
         <span className="text-zinc-500">verdict</span>
-        <span className="viz-chip viz-chip-ok">ALLOW · join trusted VLAN</span>
-        <span className="viz-chip viz-chip-warn">DENY · stay quarantined</span>
+        <span className={cx("viz-chip viz-chip-ok", decided && !tampered ? "is-active" : "is-dim")}>
+          ALLOW · join trusted VLAN
+        </span>
+        <span className={cx("viz-chip viz-chip-warn", decided && tampered ? "is-active" : "is-dim")}>
+          DENY · stay quarantined
+        </span>
       </p>
     </div>
   );
 }
 
+/** Where the ring buffer's indexes are after `step` ticks: frames arrive in
+ *  bursts from the ISR, and the main loop drains them to UART more slowly. */
+function ringState(step) {
+  let write = 0;
+  let read = 0;
+  for (let t = 1; t <= step; t += 1) {
+    const burst = t % 24 < 15;
+    if (burst && write - read < 31) write += 1;
+    if (read < write && (!burst || t % 2 === 0)) read += 1;
+  }
+  return { write, read };
+}
+
 function RingVisual() {
+  const ref = useRef(null);
+  const step = useStep(192, 200, ref);
+  const { write, read } = ringState(step);
+  const pendingCount = write - read;
+  const head = write % 32;
+  const pending = new Set();
+  for (let i = read; i < write; i += 1) pending.add(i % 32);
   const slots = Array.from({ length: 32 }, (_, i) => i);
-  const read = 5;
-  const write = 13;
+  const receiving = step % 24 < 15 && step > 0;
   return (
-    <div className="flex w-full items-center justify-center gap-4 font-mono text-[10.5px]">
-      <p className="w-24 text-right leading-relaxed text-zinc-400">
-        <span className="block text-zinc-200">CAN RX ISR</span>
+    <div ref={ref} className="flex w-full items-center justify-center gap-3 font-mono text-[10.5px]">
+      <p className="min-w-0 flex-1 text-right leading-relaxed text-zinc-400">
+        <span className={cx("block", receiving ? "text-sky-300" : "text-zinc-200")}>CAN RX ISR</span>
         writes at head
+        <span className="mt-1 block text-zinc-500 tabular-nums">in {write}</span>
       </p>
-      <svg viewBox="0 0 120 120" className="h-[7.25rem] w-[7.25rem] shrink-0" role="img" aria-label="32-slot circular buffer with eight frames waiting between the read and write indexes">
+      <svg viewBox="0 0 120 120" className="h-[6.75rem] w-[6.75rem] shrink-0" role="img" aria-label="32-slot circular buffer filling from the interrupt and draining to UART">
         {slots.map((i) => {
           const angle = (i / 32) * Math.PI * 2 - Math.PI / 2;
-          const pending = i >= read && i < write;
+          const isPending = pending.has(i);
+          const isHead = i === head;
           return (
             <circle
               key={i}
               cx={(60 + Math.cos(angle) * 48).toFixed(2)}
               cy={(60 + Math.sin(angle) * 48).toFixed(2)}
-              r={pending ? 4 : 3}
-              fill={pending ? "#34d399" : "#121215"}
-              stroke={pending ? "#34d399" : "rgba(255,255,255,0.28)"}
-              strokeWidth="1"
+              r={isPending ? 4 : 3}
+              fill={isPending ? "#34d399" : "#121215"}
+              stroke={isHead ? "#38bdf8" : isPending ? "#34d399" : "rgba(255,255,255,0.28)"}
+              strokeWidth={isHead ? 2 : 1}
             />
           );
         })}
         <text x="60" y="57" textAnchor="middle" fontFamily="Instrument Serif, serif" fontSize="26" fill="#fafafa">
-          32
+          {pendingCount}
         </text>
         <text x="60" y="73" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="8.5" fill="#8b8b94">
-          slots
+          of 32 queued
         </text>
       </svg>
-      <p className="w-24 leading-relaxed text-zinc-400">
-        <span className="block text-zinc-200">main loop</span>
+      <p className="min-w-0 flex-1 leading-relaxed text-zinc-400">
+        <span className="flex items-center gap-1.5 text-zinc-200">
+          <span className={cx("led", pendingCount > 0 ? "is-green" : "is-red")} aria-hidden="true" />
+          main loop
+        </span>
         drains to UART
+        <span className="mt-1 block text-zinc-500 tabular-nums">out {read}</span>
       </p>
     </div>
   );
 }
 
+const DATAPATH_STAGES = ["PC", "Instr Mem", "Reg File", "ALU", "Data Mem", "Write back"];
+const DATAPATH_PROGRAM = [
+  { op: "ADD", text: "ADD X9, X10, X11", uses: [0, 1, 2, 3, 5] },
+  { op: "LDUR", text: "LDUR X9, [X10, #8]", uses: [0, 1, 2, 3, 4, 5] },
+  { op: "STUR", text: "STUR X9, [X10, #16]", uses: [0, 1, 2, 3, 4] },
+  { op: "CBZ", text: "CBZ X9, loop", uses: [0, 1, 2, 3] },
+];
+const DATAPATH_FRAMES = DATAPATH_PROGRAM.flatMap((ins, index) => ins.uses.map((stage) => ({ index, stage })));
+const DATAPATH_OPS = ["ADD", "SUB", "AND", "ORR", "ADDI", "SUBI", "MOVZ", "LDUR", "STUR", "CBZ", "B"];
+
 function DatapathVisual() {
-  const stages = ["PC", "Instr Mem", "Reg File", "ALU", "Data Mem"];
-  const ops = ["ADD", "SUB", "AND", "ORR", "ADDI", "SUBI", "MOVZ", "LDUR", "STUR", "CBZ", "B"];
+  const ref = useRef(null);
+  const step = useStep(DATAPATH_FRAMES.length, 650, ref);
+  const frame = DATAPATH_FRAMES[step];
+  const ins = DATAPATH_PROGRAM[frame.index];
   return (
-    <div className="flex w-full flex-col gap-3 font-mono text-[11px]">
+    <div ref={ref} className="flex w-full flex-col gap-3 font-mono text-[11px]">
       <p className="flex flex-wrap items-center gap-2">
         <span className="viz-chip viz-chip-ctl">Control Unit</span>
-        <span className="text-zinc-500">decodes instr[31:21], drives every mux below</span>
+        <span className="text-zinc-500">executing</span>
+        <span className="text-zinc-100">{ins.text}</span>
       </p>
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
-        {stages.map((stage) => (
-          <React.Fragment key={stage}>
-            <span className="viz-chip text-zinc-200">{stage}</span>
-            <ArrowRight size={12} className="text-zinc-600" aria-hidden="true" />
-          </React.Fragment>
-        ))}
-        <span className="viz-chip viz-chip-ok">write back</span>
+        {DATAPATH_STAGES.map((stage, i) => {
+          const used = ins.uses.includes(i);
+          const done = used && i < frame.stage;
+          return (
+            <React.Fragment key={stage}>
+              {i > 0 ? <ArrowRight size={12} className="text-zinc-600" aria-hidden="true" /> : null}
+              <span
+                className={cx(
+                  "viz-chip",
+                  i === frame.stage ? "is-active text-zinc-50" : done ? "viz-chip-ok" : "text-zinc-300",
+                  !used && "is-dim"
+                )}
+              >
+                {stage}
+              </span>
+            </React.Fragment>
+          );
+        })}
       </div>
       <ul className="flex flex-wrap gap-1">
-        {ops.map((op) => (
-          <li key={op} className="op">
+        {DATAPATH_OPS.map((op) => (
+          <li key={op} className={cx("op", op === ins.op && "is-active")}>
             {op}
           </li>
         ))}
       </ul>
-      <VizCaption>11 instructions, 64-bit datapath, one clock cycle each</VizCaption>
+      <VizCaption>each instruction finishes in one clock cycle; greyed stages are skipped</VizCaption>
     </div>
+  );
+}
+
+// A short scripted hand. `play` marks the card you are about to put down.
+const CRAZY8_GAME = [
+  { top: "7♥", hand: ["3♥", "J♣", "8♠", "K♦", "5♠"], ai: 4, play: "3♥", text: "Your turn: match ♥ or a 7" },
+  { top: "3♥", hand: ["J♣", "8♠", "K♦", "5♠"], ai: 4, text: "You play 3♥. AI is thinking…" },
+  { top: "3♣", hand: ["J♣", "8♠", "K♦", "5♠"], ai: 3, play: "J♣", text: "AI matches the rank with 3♣" },
+  { top: "J♣", hand: ["8♠", "K♦", "5♠"], ai: 3, text: "You follow suit with J♣" },
+  { top: "J♣", hand: ["8♠", "K♦", "5♠"], ai: 4, play: "8♠", text: "AI has no match and draws a card" },
+  { top: "8♠", suit: "♦", hand: ["K♦", "5♠"], ai: 4, text: "You play a wild 8 and declare ♦" },
+  { top: "9♦", hand: ["K♦", "5♠"], ai: 3, play: "K♦", text: "AI follows the declared suit with 9♦" },
+  { top: "K♦", hand: ["5♠"], ai: 3, text: "You play K♦. One card left!" },
+];
+
+function PlayingCard({ card, className }) {
+  const suit = card.slice(-1);
+  const red = suit === "♥" || suit === "♦";
+  return (
+    <span className={cx("pcard", red && "is-red", className)}>
+      <span>{card.slice(0, -1)}</span>
+      <span aria-hidden="true">{suit}</span>
+    </span>
   );
 }
 
 function CardsVisual() {
-  const hand = [
-    { r: "3", s: "♥", red: true },
-    { r: "J", s: "♣" },
-    { r: "8", s: "♠", wild: true },
-    { r: "K", s: "♦", red: true },
-    { r: "5", s: "♠" },
-  ];
+  const ref = useRef(null);
+  const step = useStep(CRAZY8_GAME.length + 1, 1500, ref);
+  const state = CRAZY8_GAME[Math.min(step, CRAZY8_GAME.length - 1)];
   return (
-    <div className="flex w-full flex-col items-center gap-3">
-      <ul className="flex items-end justify-center gap-2 pt-3">
-        {hand.map((card) => (
-          <li key={card.r + card.s} className={cx("pcard", card.red && "is-red", card.wild && "is-wild")}>
-            <span>{card.r}</span>
-            <span aria-hidden="true">{card.s}</span>
-          </li>
-        ))}
-      </ul>
-      <VizCaption>an 8 is wild: play it and declare the next suit</VizCaption>
+    <div ref={ref} className="flex w-full flex-col gap-2.5 font-mono text-[10.5px]">
+      <div className="flex items-center gap-2">
+        <span className="w-7 text-zinc-500">AI</span>
+        <span className="flex gap-1">
+          {Array.from({ length: state.ai }, (_, i) => (
+            <span key={i} className="pcard pcard-sm pcard-back" />
+          ))}
+        </span>
+        <span className="text-zinc-500 tabular-nums">{state.ai} cards</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="w-7 text-zinc-500">pile</span>
+        <span className="pcard pcard-back" title="Draw pile" />
+        <PlayingCard key={state.top + step} card={state.top} className="is-top" />
+        <span className="min-w-0 flex-1 text-[11px] leading-snug text-zinc-200">
+          {state.text}
+          {state.suit ? <span className="mt-0.5 block text-emerald-300">suit is now {state.suit}</span> : null}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="w-7 text-zinc-500">you</span>
+        <span className="flex gap-1.5">
+          {state.hand.map((card) => (
+            <PlayingCard key={card} card={card} className={cx("pcard-md", card === state.play && "is-wild")} />
+          ))}
+        </span>
+      </div>
     </div>
   );
 }
 
+const SORT_FILES = [
+  { name: "report.pdf", to: "documents" },
+  { name: "photo.png", to: "images" },
+  { name: "setup.exe", to: "installers" },
+  { name: "clip.mp4", to: "videos", slow: true },
+  { name: "song.mp3", to: "audio" },
+];
+const SORT_FOLDERS = ["images", "documents", "videos", "audio", "installers"];
+const SORT_FRAMES = SORT_FILES.flatMap((file) => {
+  const ext = file.name.slice(file.name.lastIndexOf("."));
+  return [
+    { file: file.name, text: "new file appears in Downloads" },
+    ...(file.slow ? [{ file: file.name, waiting: true, text: "still downloading (size changing): skipped for now" }] : []),
+    { file: file.name, target: file.to, text: `${ext} belongs in ${file.to}/` },
+    { moved: file.to, text: `moved to ${file.to}/` },
+  ];
+});
+
 function SortVisual() {
-  const folders = ["images", "documents", "videos", "audio", "installers"];
+  const ref = useRef(null);
+  const step = useStep(SORT_FRAMES.length, 1000, ref);
+  const frame = SORT_FRAMES[step];
+  const counts = {};
+  SORT_FRAMES.slice(0, step + 1).forEach((f) => {
+    if (f.moved) counts[f.moved] = (counts[f.moved] ?? 0) + 1;
+  });
   return (
-    <div className="flex w-full flex-col gap-3 font-mono text-[11px]">
-      <p className="flex flex-wrap items-center gap-2">
+    <div ref={ref} className="flex w-full flex-col gap-2.5 font-mono text-[11px]">
+      <p className="flex min-h-[1.7rem] flex-wrap items-center gap-2">
         <span className="viz-chip text-zinc-200">~/Downloads</span>
-        <span className="text-zinc-500">watched in real time</span>
+        {frame.file ? (
+          <span key={frame.file} className={cx("viz-chip file-chip", frame.waiting ? "viz-chip-warn" : "is-active text-zinc-50")}>
+            {frame.file}
+          </span>
+        ) : (
+          <span className="text-zinc-600">watching…</span>
+        )}
       </p>
-      <p className="flex items-center gap-2 text-zinc-500">
-        <ArrowRight size={12} className="rotate-90 text-zinc-600" aria-hidden="true" /> sorted by file extension
+      <p className="viz-status">
+        <span className={frame.waiting ? "text-rose-300" : frame.moved ? "text-emerald-300" : "text-zinc-200"}>▸ {frame.text}</span>
       </p>
       <ul className="flex flex-wrap gap-1.5">
-        {folders.map((folder) => (
-          <li key={folder} className="viz-chip text-sky-300">
-            {folder}/
+        {SORT_FOLDERS.map((folder) => (
+          <li
+            key={folder}
+            className={cx(
+              "viz-chip text-sky-300",
+              (frame.target === folder || frame.moved === folder) && "is-active",
+              frame.moved === folder && "viz-chip-ok"
+            )}
+          >
+            {folder}/ <span className="text-zinc-400 tabular-nums">{counts[folder] ?? 0}</span>
           </li>
         ))}
       </ul>
-      <VizCaption>files still downloading are skipped until their size stops changing</VizCaption>
     </div>
   );
 }
@@ -1787,7 +2034,7 @@ function Projects() {
         </label>
       </Reveal>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {featured.map((project, i) => (
           <Reveal key={project.id} delay={(i % 2) * 80}>
             <ProjectCard project={project} />
