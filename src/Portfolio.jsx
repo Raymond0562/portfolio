@@ -491,7 +491,7 @@ export const PROJECTS_DATA = [
     description:
       "Interrupt-driven CAN-to-UART relay in embedded C. A 32-slot volatile circular buffer hands frames from the receive ISR to the main loop safely, with endian-converted framing, overflow handling, and an RGB LED activity indicator.",
     tags: ["Embedded C", "Interrupts", "CAN", "UART", "Circular Buffer"],
-    repo: "",
+    repo: "https://github.com/Raymond0562/can-uart-telemetry-relay",
     featured: true,
   },
   {
@@ -525,7 +525,7 @@ export const PROJECTS_DATA = [
     description:
       "Python tool that watches Downloads with watchdog and sorts new files into 6 typed categories, skipping files still mid-download, handling duplicate names, and reverting with one command.",
     tags: ["Python", "watchdog", "Automation"],
-    repo: "",
+    repo: "https://github.com/Raymond0562/File_Organizer",
     featured: false,
   },
 ];

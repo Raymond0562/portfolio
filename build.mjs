@@ -1,6 +1,5 @@
-// Bundles src/ into a single self-contained page.
-//   dist/portfolio.html  - fragment for Claude Artifacts (no doctype wrapper)
-//   dist/index.html      - same page with a full document wrapper, for opening locally
+// Bundles src/ into dist/portfolio.html, a single self-contained fragment for
+// Claude Artifacts. The real website is built by Vite: `npm run build`.
 // Preview build only: it uses the Tailwind play CDN and Google Fonts. For
 // production, compile Tailwind and self-host fonts so the strict CSP in
 // vercel.json applies as written.
@@ -16,7 +15,7 @@ const common = {
   logLevel: "warning",
 };
 
-const client = await build({ ...common, entryPoints: ["src/main.jsx"], format: "iife", minify: true, target: "es2020" });
+const client = await build({ ...common, entryPoints: ["src/artifact.jsx"], format: "iife", minify: true, target: "es2020" });
 const js = client.outputFiles[0].text;
 const css = await readFile("src/styles.css", "utf8");
 
@@ -44,8 +43,4 @@ ${css}
 
 await mkdir("dist", { recursive: true });
 await writeFile("dist/portfolio.html", page);
-await writeFile(
-  "dist/index.html",
-  `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n</head>\n<body>\n${page}</body>\n</html>\n`
-);
 console.log(`built dist/portfolio.html (${(page.length / 1024).toFixed(0)} KB), smoke render ok (${html.length} chars)`);
