@@ -239,12 +239,73 @@ export const PORTFOLIO_CONFIG = {
     grad: "May 2028",
     gpa: "4.00",
     badges: ["Engineering Honors", "Minor: Mathematics", "Minor: Cybersecurity", "Dean's Honor Roll"],
+    // c = course, n = title, cr = credit hours, h = honors section.
     terms: [
-      { t: "Fall 24", hours: 13, gpa: "4.00" },
-      { t: "Spr 25", hours: 12, gpa: "4.00" },
-      { t: "Fall 25", hours: 16, gpa: "4.00" },
-      { t: "Spr 26", hours: 15, gpa: "4.00" },
-      { t: "Fall 26", hours: 15, now: true },
+      {
+        t: "Fall 24",
+        full: "Fall 2024",
+        hours: 13,
+        gpa: "4.00",
+        courses: [
+          { c: "MATH 151", n: "Engineering Mathematics I", cr: 4 },
+          { c: "CHEM 107", n: "General Chemistry for Engineers", cr: 3 },
+          { c: "CHEM 117", n: "General Chemistry for Engineers Lab", cr: 1 },
+          { c: "ENGR 102", n: "Engineering Lab I: Computation", cr: 2 },
+          { c: "ANTH 205", n: "Peoples and Cultures of the World", cr: 3 },
+          { c: "FYEX 101", n: "Hullabaloo U", cr: 0 },
+        ],
+      },
+      {
+        t: "Spr 25",
+        full: "Spring 2025",
+        hours: 12,
+        gpa: "4.00",
+        courses: [
+          { c: "CSCE 120", n: "Program Design & Concepts", cr: 3 },
+          { c: "MATH 152", n: "Engineering Mathematics II", cr: 4 },
+          { c: "PHYS 206", n: "Newtonian Mechanics for Engineering & Science", cr: 3 },
+          { c: "PHYS 216", n: "Experimental Physics & Engineering Lab II: Mechanics", cr: 2 },
+        ],
+      },
+      {
+        t: "Fall 25",
+        full: "Fall 2025",
+        hours: 16,
+        gpa: "4.00",
+        courses: [
+          { c: "ECEN 248", n: "Introduction to Digital Systems Design", cr: 4 },
+          { c: "CSCE 222", n: "Discrete Structures for Computing", cr: 3, h: true },
+          { c: "MATH 251", n: "Engineering Mathematics III", cr: 3 },
+          { c: "STAT 211", n: "Principles of Statistics I", cr: 3 },
+          { c: "PHYS 217", n: "Experimental Physics & Engineering Lab III: E&M", cr: 2, h: true },
+          { c: "ENGR 181", n: "Engineering Honors Seminar I", cr: 1, h: true },
+        ],
+      },
+      {
+        t: "Spr 26",
+        full: "Spring 2026",
+        hours: 15,
+        gpa: "4.00",
+        courses: [
+          { c: "CSCE 221", n: "Data Structures & Algorithms", cr: 4 },
+          { c: "ECEN 214", n: "Electrical Circuit Theory", cr: 4, h: true },
+          { c: "MATH 308", n: "Differential Equations", cr: 3, h: true },
+          { c: "MATH 311", n: "Topics in Applied Mathematics I", cr: 3 },
+          { c: "CSCE 481", n: "Seminar", cr: 1 },
+        ],
+      },
+      {
+        t: "Fall 26",
+        full: "Fall 2026",
+        hours: 14,
+        now: true,
+        courses: [
+          { c: "CSCE 313", n: "Introduction to Computer Systems", cr: 4, h: true },
+          { c: "ECEN 350", n: "Computer Architecture & Design", cr: 4, h: true },
+          { c: "ECEN 314", n: "Signals & Systems", cr: 3 },
+          { c: "MUSC 327", n: "Popular Music in the African Diaspora", cr: 3 },
+        ],
+      },
     ],
   },
   // h = honors section, now = in progress this term.
@@ -1040,6 +1101,8 @@ const INTEREST_ICONS = { bjj: Swords, lego: Blocks, read: BookOpen, hike: Mounta
 function About() {
   const clock = useClock(C.location.timeZone);
   const edu = C.education;
+  const [openTerm, setOpenTerm] = useState(null);
+  const activeTerm = edu.terms.find((term) => term.t === openTerm) ?? null;
   const maxHours = Math.max(...edu.terms.map((term) => term.hours));
   return (
     <section id="about" className="section print:hidden">
@@ -1106,26 +1169,64 @@ function About() {
             </div>
 
             <div>
-              <p className="mb-3 font-mono text-[11px] text-zinc-500">credit hours by term, every graded term at 4.00</p>
-              <ol className="grid grid-cols-5 gap-2">
-                {edu.terms.map((term) => (
-                  <li key={term.t} className="flex flex-col gap-1.5">
-                    <span className="flex h-20 items-end">
-                      <Fill
-                        axis="height"
-                        pct={(term.hours / maxHours) * 100}
-                        title={`${term.t}: ${term.hours} credit hours${term.now ? ", in progress" : `, GPA ${term.gpa}`}`}
-                        className={cx("term-bar", term.now && "is-now")}
-                      />
-                    </span>
-                    <span className="font-mono text-[11px] text-zinc-200 tabular-nums">{term.hours} h</span>
-                    <span className="font-mono text-[10px] text-zinc-500">{term.t}</span>
-                    <span className={cx("font-mono text-[10px]", term.now ? "text-emerald-400" : "text-zinc-400")}>
-                      {term.now ? "in progress" : term.gpa}
-                    </span>
-                  </li>
-                ))}
+              <p className="mb-3 font-mono text-[11px] text-zinc-500">credit hours by term, every graded term at 4.00 · select a term to see its classes</p>
+              <ol className="grid grid-cols-5 gap-1">
+                {edu.terms.map((term) => {
+                  const isOpen = term.t === openTerm;
+                  return (
+                    <li key={term.t}>
+                      <button
+                        type="button"
+                        className={cx("term-btn", isOpen && "is-open")}
+                        aria-expanded={isOpen}
+                        aria-controls="term-panel"
+                        aria-label={`${term.full}: ${term.hours} credit hours${term.now ? ", in progress" : `, GPA ${term.gpa}`}. Show classes.`}
+                        onClick={() => setOpenTerm(isOpen ? null : term.t)}
+                      >
+                        <span className="flex h-20 items-end">
+                          <Fill
+                            axis="height"
+                            pct={(term.hours / maxHours) * 100}
+                            className={cx("term-bar", term.now && "is-now")}
+                          />
+                        </span>
+                        <span className="font-mono text-[11px] text-zinc-200 tabular-nums">{term.hours} h</span>
+                        <span className="font-mono text-[10px] text-zinc-500">{term.t}</span>
+                        <span className={cx("font-mono text-[10px]", term.now ? "text-emerald-400" : "text-zinc-400")}>
+                          {term.now ? "in progress" : term.gpa}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
               </ol>
+              <div id="term-panel" aria-live="polite">
+                {activeTerm ? (
+                  <div key={activeTerm.t} className="term-panel">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                      <p className="font-semibold tracking-[-0.01em] text-zinc-50">{activeTerm.full}</p>
+                      <p className="font-mono text-[11px] text-zinc-500">
+                        {activeTerm.hours} credit hours ·{" "}
+                        <span className={activeTerm.now ? "text-emerald-400" : "text-zinc-300"}>
+                          {activeTerm.now ? "in progress" : `GPA ${activeTerm.gpa}`}
+                        </span>
+                      </p>
+                    </div>
+                    <ul className="mt-2 flex flex-col">
+                      {activeTerm.courses.map((course) => (
+                        <li key={course.c} className="course-row">
+                          <span className="w-[4.6rem] shrink-0 font-mono text-[11.5px] text-sky-400">{course.c}</span>
+                          <span className="min-w-0 flex-1 text-[13.5px] text-zinc-300">{course.n}</span>
+                          {course.h ? <span className="course-h">H</span> : null}
+                          <span className="w-8 shrink-0 text-right font-mono text-[11px] text-zinc-500 tabular-nums">
+                            {course.cr} h
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <ul className="mt-auto flex flex-wrap gap-2">
