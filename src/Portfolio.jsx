@@ -20,8 +20,9 @@
  *   - Availability badge ........ PORTFOLIO_CONFIG.status (and the two matching
  *                                 lines in PORTFOLIO_CONFIG.terminal)
  *   - Current project ........... PORTFOLIO_CONFIG.current
- *   - Projects .................. PROJECTS_DATA (featured: true = main grid,
- *                                 featured: false = archive card)
+ *   - Projects .................. PROJECTS_DATA (featured: true = listed first;
+ *                                 the grid shows 6, the rest sit behind
+ *                                 "More Projects / Archive")
  *   - Experience timeline ....... PORTFOLIO_CONFIG.timeline
  *   - Resume sheet .............. RESUME, then run `npm run resume-pdf` so the
  *                                 downloadable PDF matches
@@ -456,7 +457,7 @@ export const PORTFOLIO_CONFIG = {
     status: "Active Development",
     overview:
       "An open-source, privacy-first local AI voting assistant designed to run on personal hardware using small language models (SLMs) via Ollama, RAG, and nonpartisan civic data APIs (Congress.gov, Open States, OpenFEC) to deliver unbiased candidate and ballot information with zero cloud dependency.",
-    tags: ["Local SLMs", "RAG", "Python", "Civic Data APIs", "Privacy-First"],
+    tags: ["Rust", "RAG Retrieval", "SQLite FTS5", "Signed Evidence Packs", "Privacy-First"],
     pipeline: ["Your question", "Retrieve evidence", "Local SLM", "Cited answer"],
     // What you're working on right now. Free-form; edit as the work moves.
     workLog: [
@@ -542,8 +543,10 @@ export const PORTFOLIO_CONFIG = {
 };
 
 /* [EDIT HERE] Add, remove or reorder projects.
- * Central project list. `featured: true` shows in the main grid;
- * `featured: false` lands in the "More Projects / Archive" card.
+ * Central project list. Each category tab shows every project in that
+ * category. `featured: true` projects are listed first, so they fill the
+ * first PROJECTS_INITIAL slots; the rest are revealed PROJECTS_STEP at a time
+ * by the "More Projects / Archive" card.
  * Shape: { id, name, code?, org?, category, description, tags, repo?,
  *          visual?, featured }
  * `visual` picks the drawing at the top of the card (see PROJECT_VISUALS). */
@@ -555,7 +558,7 @@ export const PROJECTS_DATA = [
     visual: "odds",
     description:
       "End-to-end ML pipeline trained on 49,500+ international matches. It benchmarks Logistic Regression, Random Forest, XGBoost, and LightGBM with isotonic-calibrated probabilities and a leakage-free chronological split, then runs 10,000-iteration Monte Carlo simulations of the 2026 FIFA World Cup. 60.8% test accuracy, deployed with Streamlit.",
-    tags: ["Python", "Data Modeling", "Simulation", "Sports Analytics", "XGBoost"],
+    tags: ["Python", "scikit-learn", "Monte Carlo Simulation", "Streamlit", "Sports Analytics"],
     repo: "https://github.com/Raymond0562/World-Cup-Predictor",
     featured: true,
   },
@@ -567,7 +570,7 @@ export const PROJECTS_DATA = [
     visual: "vlan",
     description:
       "Dynamic VLAN segmentation and enforcement layer built on hostapd, iptables, and tc. Unattested devices land in quarantine, and drones that pass attestation are promoted into isolated subnets drawn from a 100-VLAN trusted pool, which cuts off lateral movement.",
-    tags: ["VLAN", "Network Segmentation", "Access Control", "Enterprise Networking", "GCRI"],
+    tags: ["VLAN", "Network Segmentation", "Network Access Control", "hostapd", "iptables"],
     repo: "",
     featured: true,
   },
@@ -579,7 +582,7 @@ export const PROJECTS_DATA = [
     visual: "mitm",
     description:
       "Red-team exercises across a 3-node lab network: ground station, drone, and attacker. Simulated MITM, ARP spoofing, and Scapy packet injection against the attestation service and the MAVLink control channel, and built a GUI that wraps the attack scripts with a live packet view.",
-    tags: ["Red Teaming", "MITM", "Adversary Emulation", "Network Security", "Vulnerability Assessment"],
+    tags: ["Red Teaming", "MITM", "ARP Spoofing", "Scapy", "MAVLink"],
     repo: "",
     featured: true,
   },
@@ -618,13 +621,13 @@ export const PROJECTS_DATA = [
     featured: true,
   },
   {
-    id: "homework3",
+    id: "wiki-search",
     name: "Wikipedia Word Search",
     category: "systems",
     visual: "throughput",
     description:
       "High-performance multithreaded keyword search over Wikipedia dumps. A reader streams the file in 1 to 16 MB blocks to search threads, scanning an 8.6 GB dump at about 2,100 MB/s for one keyword and 700 MB/s for 151 keywords at once.",
-    tags: ["C++", "Multithreading", "Search & Indexing", "Algorithms"],
+    tags: ["C++", "Multithreading", "Win32 API", "String Search"],
     repo: "",
     featured: true,
   },
@@ -2269,7 +2272,7 @@ const PROJECT_VISUALS = {
  * re-renders the grid, but each card that is still shown is skipped.
  *
  * @param {{project: object, wide?: boolean}} props
- *   `wide` puts the drawing beside the text on large screens (archive list).
+ *   `wide` puts the drawing beside the text on large screens.
  */
 const ProjectCard = memo(function ProjectCard({ project, wide = false }) {
   const category = CATEGORY_BY_ID.get(project.category);
@@ -2319,7 +2322,16 @@ const ProjectCard = memo(function ProjectCard({ project, wide = false }) {
  * a few String.includes calls rather than rebuilding and lower-casing every
  * project's text. */
 const PROJECT_FILTERS = [{ id: "all", label: "All" }, ...C.categories];
-const ARCHIVE_PROJECTS = PROJECTS_DATA.filter((project) => !project.featured);
+/* Featured projects first, otherwise in PROJECTS_DATA order, so they take the
+ * first slots of whichever tab is open. */
+const ORDERED_PROJECTS = [
+  ...PROJECTS_DATA.filter((project) => project.featured),
+  ...PROJECTS_DATA.filter((project) => !project.featured),
+];
+/* How many projects a tab shows up front, and how many more each press of
+ * "More Projects / Archive" reveals. */
+const PROJECTS_INITIAL = 6;
+const PROJECTS_STEP = 4;
 const PROJECT_SEARCH_TEXT = new Map(
   PROJECTS_DATA.map((project) => [
     project.id,
@@ -2343,28 +2355,52 @@ function matchesProject(project, categoryId, tokens) {
 }
 
 /**
- * Project grid with category filters, search, and the collapsible archive.
+ * Project grid with category filters, search, and the "More Projects /
+ * Archive" card.
  *
- * The filtered list is memoised on the category and the search tokens. The
- * archive's cards are not mounted until it is opened, which keeps their
- * drawings (and their timers) out of the initial render.
+ * A tab shows every project in its category: the first PROJECTS_INITIAL right
+ * away, then PROJECTS_STEP more each time the archive card is pressed. Once
+ * everything is shown the card collapses the list again. Changing the tab or
+ * the search starts over.
+ *
+ * The filtered list is memoised on the category and the search tokens. Cards
+ * beyond the visible count are not mounted, which keeps their drawings (and
+ * their timers) out of the initial render.
  */
 const Projects = memo(function Projects() {
   const [categoryId, setCategoryId] = useState("all");
   const [query, setQuery] = useState("");
-  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PROJECTS_INITIAL);
 
-  // Memoised so opening the archive (unrelated state) does not re-filter,
-  // and so `featured` keeps its identity when nothing relevant changed.
+  // Memoised so revealing more projects (unrelated state) does not re-filter,
+  // and so `matching` keeps its identity when nothing relevant changed.
   const tokens = useMemo(() => query.toLowerCase().split(" ").filter(Boolean).slice(0, 8), [query]);
-  const featured = useMemo(
-    () => PROJECTS_DATA.filter((p) => p.featured && matchesProject(p, categoryId, tokens)),
+  const matching = useMemo(
+    () => ORDERED_PROJECTS.filter((p) => matchesProject(p, categoryId, tokens)),
     [categoryId, tokens]
   );
+  const visible = useMemo(() => matching.slice(0, visibleCount), [matching, visibleCount]);
+  const remaining = matching.length - visible.length;
+  const expanded = visibleCount > PROJECTS_INITIAL;
+
+  // A new tab or search starts again from the first PROJECTS_INITIAL projects.
+  const selectCategory = useCallback((id) => {
+    setCategoryId(id);
+    setVisibleCount(PROJECTS_INITIAL);
+  }, []);
+  const changeQuery = useCallback((value) => {
+    setQuery(sanitizeQuery(value));
+    setVisibleCount(PROJECTS_INITIAL);
+  }, []);
   const clearFilters = useCallback(() => {
     setCategoryId("all");
     setQuery("");
+    setVisibleCount(PROJECTS_INITIAL);
   }, []);
+  // Reveals the next PROJECTS_STEP projects, or collapses once all are shown.
+  const toggleMore = useCallback(() => {
+    setVisibleCount((count) => (remaining > 0 ? count + PROJECTS_STEP : PROJECTS_INITIAL));
+  }, [remaining]);
 
   return (
     <section id="projects" className="section print:hidden">
@@ -2382,7 +2418,7 @@ const Projects = memo(function Projects() {
               key={filter.id}
               type="button"
               aria-pressed={categoryId === filter.id}
-              onClick={() => setCategoryId(filter.id)}
+              onClick={() => selectCategory(filter.id)}
               className={cx("filter-btn", categoryId === filter.id && "is-active")}
             >
               {filter.label}
@@ -2397,7 +2433,7 @@ const Projects = memo(function Projects() {
             type="search"
             value={query}
             maxLength={MAX_QUERY_LENGTH}
-            onChange={(event) => setQuery(sanitizeQuery(event.target.value))}
+            onChange={(event) => changeQuery(event.target.value)}
             placeholder="Search projects, tags…"
             autoComplete="off"
             spellCheck="false"
@@ -2405,14 +2441,14 @@ const Projects = memo(function Projects() {
         </label>
       </Reveal>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {featured.map((project, i) => (
+      <div id="project-grid" className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {visible.map((project, i) => (
           <Reveal key={project.id} delay={(i % 2) * 80}>
             <ProjectCard project={project} />
           </Reveal>
         ))}
 
-        {featured.length === 0 ? (
+        {matching.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center md:col-span-2">
             <p className="text-zinc-300">No projects match that filter.</p>
             <button
@@ -2425,49 +2461,38 @@ const Projects = memo(function Projects() {
           </div>
         ) : null}
 
-        <Reveal className="md:col-span-2">
-          <Card className="p-0">
-            <button
-              type="button"
-              className="flex w-full items-center gap-4 p-6 text-left"
-              aria-expanded={archiveOpen}
-              aria-controls="archive-panel"
-              onClick={() => setArchiveOpen((open) => !open)}
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] text-zinc-400">
-                <Archive size={17} aria-hidden="true" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block font-semibold tracking-[-0.02em] text-zinc-50">More Projects / Archive</span>
-                <span className="block font-mono text-xs text-zinc-500">
-                  {ARCHIVE_PROJECTS.length === 0 ? "slots open" : `${ARCHIVE_PROJECTS.length} more`}
+        {remaining > 0 || expanded ? (
+          <Reveal className="md:col-span-2">
+            <Card className="p-0">
+              <button
+                type="button"
+                className="flex w-full items-center gap-4 p-6 text-left"
+                aria-expanded={expanded}
+                aria-controls="project-grid"
+                onClick={toggleMore}
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] text-zinc-400">
+                  <Archive size={17} aria-hidden="true" />
                 </span>
-              </span>
-              <ChevronDown
-                size={18}
-                aria-hidden="true"
-                className={cx("shrink-0 text-zinc-500 transition-transform duration-300", archiveOpen && "rotate-180")}
-              />
-            </button>
-            <div id="archive-panel" hidden={!archiveOpen} className="border-t border-white/[0.08] p-6">
-              {!archiveOpen ? null : ARCHIVE_PROJECTS.length === 0 ? (
-                <p className="max-w-[65ch] text-sm leading-relaxed text-zinc-400">
-                  Nothing archived yet. Add an entry to{" "}
-                  <code className="font-mono text-zinc-200">PROJECTS_DATA</code> with{" "}
-                  <code className="font-mono text-zinc-200">featured: false</code> and it shows up here.
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-4">
-                  {ARCHIVE_PROJECTS.map((project) => (
-                    <li key={project.id}>
-                      <ProjectCard project={project} wide />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </Card>
-        </Reveal>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold tracking-[-0.02em] text-zinc-50">
+                    {remaining > 0 ? "More Projects / Archive" : "Show fewer projects"}
+                  </span>
+                  <span className="block font-mono text-xs text-zinc-500" aria-live="polite">
+                    {remaining > 0
+                      ? `${remaining} more · show ${Math.min(PROJECTS_STEP, remaining)}`
+                      : `showing all ${matching.length}`}
+                  </span>
+                </span>
+                <ChevronDown
+                  size={18}
+                  aria-hidden="true"
+                  className={cx("shrink-0 text-zinc-500 transition-transform duration-300", remaining === 0 && "rotate-180")}
+                />
+              </button>
+            </Card>
+          </Reveal>
+        ) : null}
       </div>
     </section>
   );
