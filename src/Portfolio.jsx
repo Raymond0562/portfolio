@@ -127,7 +127,7 @@ export const RESUME = {
       id: "gcri",
       org: "Texas A&M Global Cyber Research Institute",
       place: "College Station, TX",
-      role: "Undergraduate Team Lead",
+      role: "Undergraduate Researcher",
       period: "Feb 2026 - Present",
       bullets: [
         "Leads hardware design and integration for a NASA USRC drone cybersecurity research project, managing embedded systems including Raspberry Pi, TPM, and GPS modules across ground-station and drone platforms.",
@@ -261,7 +261,7 @@ export const PORTFOLIO_CONFIG = {
       lines: [
         { t: "cmd", v: "whoami" },
         { t: "out", v: "raymond.yang" },
-        { t: "kv", k: "role", v: "Undergraduate Team Lead @ GCRI" },
+        { t: "kv", k: "role", v: "Undergraduate Researcher @ GCRI" },
         { t: "kv", k: "school", v: "Texas A&M · Computer Engineering '28" },
         { t: "kv", k: "minors", v: "Mathematics, Cybersecurity" },
         { t: "cmd", v: "status --now" },
